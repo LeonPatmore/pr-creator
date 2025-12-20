@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 pygithub = "*"
 pydantic-ai = "*"
+pydantic-graph = "*"
 
 [dev-packages]
 pytest = "*"

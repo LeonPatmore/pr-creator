@@ -4,7 +4,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 
-from .types import BaseNode, End, GraphRunContext
+from pydantic_graph import BaseNode, End, GraphRunContext
 from .next_repo import NextRepo
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class CleanupRepo(BaseNode):
     repo_url: str
 
-    async def run(self, ctx: GraphRunContext) -> BaseNode | End | None:
+    async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned.get(self.repo_url)
         if path:
             try:

@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from .types import BaseNode, End, GraphRunContext
+from pydantic_graph import BaseNode, End, GraphRunContext
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def evaluate_relevance(relevance_prompt: str, repo_path: Path) -> bool:
 class EvaluateRelevance(BaseNode):
     repo_url: str
 
-    async def run(self, ctx: GraphRunContext) -> BaseNode | End | None:
+    async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned[self.repo_url]
         is_relevant = evaluate_relevance(ctx.state.relevance_prompt, path)
         logger.info("Relevance %s -> %s", self.repo_url, is_relevant)

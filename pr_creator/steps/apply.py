@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pr_creator.change_agents import get_change_agent
 
-from .types import BaseNode, End, GraphRunContext
+from pydantic_graph import BaseNode, End, GraphRunContext
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ApplyChanges(BaseNode):
     repo_url: str
 
-    async def run(self, ctx: GraphRunContext) -> BaseNode | End | None:
+    async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
         agent = get_change_agent()
