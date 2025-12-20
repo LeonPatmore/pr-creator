@@ -1,8 +1,8 @@
 __all__ = [
     "cli",
     "workflow",
-    "change_agent",
-    "pr_interface",
+    "change_agents",
+    "submit_change",
     "state",
 ]
 

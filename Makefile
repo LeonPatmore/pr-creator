@@ -6,3 +6,6 @@ DOCKER ?= docker
 build-cursor-image:
 	$(DOCKER) build -t $(IMAGE):$(TAG) .
 
+.PHONY: test-e2e
+test-e2e:
+	pipenv run pytest tests/test_cli_e2e.py -q
