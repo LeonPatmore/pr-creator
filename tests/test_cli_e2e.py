@@ -30,7 +30,9 @@ def test_cli_creates_pr_and_cleans_up() -> None:
     if missing:
         pytest.skip(f"Missing required env vars: {', '.join(missing)}")
 
-    repo_url = os.environ.get("TEST_REPO_URL", "https://github.com/LeonPatmore/cheap-ai-agents-aws")
+    repo_url = os.environ.get(
+        "TEST_REPO_URL", "https://github.com/LeonPatmore/cheap-ai-agents-aws"
+    )
     slug = _parse_slug(repo_url)
     if not slug:
         pytest.skip(f"Could not parse owner/repo from TEST_REPO_URL: {repo_url}")
@@ -72,7 +74,11 @@ def test_cli_creates_pr_and_cleans_up() -> None:
         subprocess.run(cmd, check=True, cwd=project_root, env=env)
 
     # Find the PR created on the branch that starts with our prefix.
-    prs = [pr for pr in repo.get_pulls(state="open") if pr.head.ref.startswith(branch_prefix)]
+    prs = [
+        pr
+        for pr in repo.get_pulls(state="open")
+        if pr.head.ref.startswith(branch_prefix)
+    ]
     assert prs, f"Expected an open PR with branch prefix {branch_prefix}"
     pr = prs[0]
     branch_ref = pr.head.ref
@@ -85,4 +91,3 @@ def test_cli_creates_pr_and_cleans_up() -> None:
     except Exception:
         # Ignore cleanup errors; test already validated the PR existed.
         pass
-

@@ -30,4 +30,3 @@ class EvaluateRelevance(BaseNode):
         from .next_repo import NextRepo
 
         return NextRepo()
-

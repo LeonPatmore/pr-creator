@@ -9,4 +9,3 @@ class ChangeAgent(ABC):
     def run(self, repo_path: Path, prompt: str) -> None:
         """Apply changes to the given repo."""
         raise NotImplementedError
-

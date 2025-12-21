@@ -40,4 +40,3 @@ class CursorChangeAgent(ChangeAgent):
             prompt,
         ]
         subprocess.run(cmd, check=True)
-

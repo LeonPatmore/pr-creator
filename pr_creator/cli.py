@@ -13,7 +13,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--relevance-prompt", required=True)
     parser.add_argument("--repo", action="append", required=True)
     parser.add_argument("--working-dir", default=".repos")
-    parser.add_argument("--log-level", default="INFO", help="Logging level (default: INFO)")
+    parser.add_argument(
+        "--log-level", default="INFO", help="Logging level (default: INFO)"
+    )
     return parser.parse_args()
 
 
@@ -31,4 +33,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

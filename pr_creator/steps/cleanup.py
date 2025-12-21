@@ -23,4 +23,3 @@ class CleanupRepo(BaseNode):
             except Exception as exc:
                 logger.warning("Failed to clean up %s: %s", path, exc)
         return NextRepo()
-

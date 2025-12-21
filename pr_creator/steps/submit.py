@@ -22,4 +22,3 @@ class SubmitChanges(BaseNode):
         from .cleanup import CleanupRepo
 
         return CleanupRepo(repo_url=self.repo_url)
-

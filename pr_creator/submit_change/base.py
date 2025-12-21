@@ -9,4 +9,3 @@ class SubmitChange(ABC):
     def submit(self, repo_path: Path) -> None:
         """Submit changes for the given repository (e.g., open a PR)."""
         raise NotImplementedError
-

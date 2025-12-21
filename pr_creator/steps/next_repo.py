@@ -11,4 +11,3 @@ class NextRepo(BaseNode):
         from .clone import CloneRepo
 
         return CloneRepo(repo_url=repo_url)
-

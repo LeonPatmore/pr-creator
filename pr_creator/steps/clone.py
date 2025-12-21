@@ -36,4 +36,3 @@ class CloneRepo(BaseNode):
         from .evaluate import EvaluateRelevance
 
         return EvaluateRelevance(repo_url=self.repo_url)
-

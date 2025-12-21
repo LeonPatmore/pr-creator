@@ -23,4 +23,3 @@ def ensure_logging_configured(level: Optional[str] = None) -> None:
     if logging.getLogger().handlers:
         return
     configure_logging(level=level, force=False)
-

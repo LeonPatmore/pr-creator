@@ -12,4 +12,3 @@ class WorkflowState:
     cloned: Dict[str, Path] = field(default_factory=dict)
     relevant: List[str] = field(default_factory=list)
     processed: List[str] = field(default_factory=list)
-

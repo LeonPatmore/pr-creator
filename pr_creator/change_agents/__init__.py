@@ -16,4 +16,3 @@ def get_change_agent(name: str | None = None) -> ChangeAgent:
 
 
 __all__ = ["ChangeAgent", "CursorChangeAgent", "get_change_agent"]
-
