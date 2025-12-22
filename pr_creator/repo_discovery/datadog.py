@@ -30,6 +30,17 @@ def _extract_repo_urls(service: dict) -> List[str]:
         if isinstance(repo, dict):
             candidates.append(repo.get("url"))
 
+    for repo_link in [
+        repo_link["url"]
+        for repo_link in list(
+            filter(
+                lambda link: link["type"] == "repo",
+                service.get("attributes", {}).get("schema", {}).get("links", []),
+            )
+        )
+    ]:
+        candidates.append(repo_link)
+
     return [c for c in candidates if c]
 
 
