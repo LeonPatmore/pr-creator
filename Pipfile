@@ -8,6 +8,8 @@ pygithub = "*"
 pydantic-ai = "*"
 pydantic-graph = "*"
 dulwich = "*"
+requests = "*"
+pyyaml = "*"
 
 [dev-packages]
 pytest = "*"
