@@ -18,6 +18,7 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
+      - docker/check
       - docker/build:
           image: << parameters.image-name >>
           tag: << parameters.tag >>
@@ -41,6 +42,7 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
+      - docker/check
       - docker/build:
           image: << parameters.image-name >>
           tag: << parameters.tag >>
