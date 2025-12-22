@@ -28,3 +28,19 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `make test-e2e` — run the e2e pytest (requires env vars set).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).
+
+### Example (Docker)
+
+```sh
+docker run --rm \
+  -e CURSOR_API_KEY \
+  -e GITHUB_TOKEN \
+  leonpatmore2/pr-creator:latest \
+  --prompt-config-owner LeonPatmore \
+  --prompt-config-repo pr-creator \
+  --prompt-config-ref main \
+  --prompt-config-path examples/prompt-config.yaml \
+  --repo https://github.com/LeonPatmore/cheap-ai-agents-aws \
+  --working-dir /tmp/repos \
+  --log-level INFO
+```

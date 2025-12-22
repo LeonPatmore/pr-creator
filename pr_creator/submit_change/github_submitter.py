@@ -5,7 +5,7 @@ import os
 import urllib.parse
 import uuid
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from dulwich import porcelain
 from dulwich.config import StackedConfig
@@ -133,14 +133,14 @@ class GithubSubmitter(SubmitChange):
         self.branch_prefix = os.environ.get("SUBMIT_BRANCH_PREFIX", "auto/pr")
         self.github_token = os.environ.get("GITHUB_TOKEN")
 
-    def submit(self, repo_path: Path) -> None:
+    def submit(self, repo_path: Path) -> Optional[Dict[str, str]]:
         repo = _load_repo(Path(repo_path))
 
         if _git_status_dirty(repo):
             _commit_changes(repo, self.commit_message)
         else:
             logger.info("[submit] no changes to commit; skipping PR creation")
-            return
+            return None
 
         origin = _origin_url(repo)
 
@@ -162,12 +162,13 @@ class GithubSubmitter(SubmitChange):
 
         if not self.github_token or remote_repo is None:
             logger.warning("GITHUB_TOKEN not set; skipping PR creation")
-            return
+            return {"repo_url": origin, "branch": branch, "pr_url": None}
 
         logger.info("[submit] creating PR head=%s base=%s", branch, base_branch)
-        remote_repo.create_pull(
+        pr = remote_repo.create_pull(
             title=self.pr_title,
             body=self.pr_body,
             head=branch,
             base=base_branch,
         )
+        return {"repo_url": origin, "branch": branch, "pr_url": pr.html_url}

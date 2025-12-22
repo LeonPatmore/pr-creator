@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -50,7 +51,8 @@ def main() -> None:
             and args.prompt_config_path
         ):
             raise SystemExit(
-                "When using prompt config, provide --prompt-config-owner, --prompt-config-repo, and --prompt-config-path"
+                "When using prompt config, provide --prompt-config-owner, "
+                "--prompt-config-repo, and --prompt-config-path"
             )
         prompts = load_prompts_from_config(
             args.prompt_config_owner,
@@ -75,7 +77,12 @@ def main() -> None:
         repos=list(args.repo),
         working_dir=Path(args.working_dir),
     )
-    asyncio.run(run_workflow(state))
+    final_state = asyncio.run(run_workflow(state))
+    summary = {
+        "irrelevant_repos": final_state.irrelevant,
+        "created_prs": final_state.created_prs,
+    }
+    print(json.dumps(summary))
 
 
 if __name__ == "__main__":

@@ -26,4 +26,5 @@ class EvaluateRelevance(BaseNode):
             return ApplyChanges(repo_url=self.repo_url)
         from .next_repo import NextRepo
 
+        ctx.state.irrelevant.append(self.repo_url)
         return NextRepo()

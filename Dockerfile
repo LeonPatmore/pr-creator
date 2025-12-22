@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1
@@ -22,5 +22,4 @@ RUN pip install --no-cache-dir pipenv \
 # App code
 COPY . .
 
-CMD ["python", "-m", "pr_creator.cli"]
-
+ENTRYPOINT ["python", "-m", "pr_creator.cli"]

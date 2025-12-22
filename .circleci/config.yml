@@ -1,0 +1,44 @@
+version: 2.1
+
+orbs:
+  docker: circleci/docker@2.1.4
+
+jobs:
+  build-and-push:
+    docker:
+      - image: cimg/base:stable
+    parameters:
+      image-name:
+        type: string
+        default: leonpatmore2/pr-creator
+      tag:
+        type: string
+        default: latest
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build image
+          command: |
+            docker build -t << parameters.image-name >>:<< parameters.tag >> .
+      - run:
+          name: Docker login
+          command: |
+            if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_PASSWORD}" ]; then
+              echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            else
+              echo "Docker Hub credentials not provided; skipping push."
+              exit 0
+            fi
+      - run:
+          name: Push image
+          command: |
+            docker push << parameters.image-name >>:<< parameters.tag >>
+
+workflows:
+  build:
+    jobs:
+      - build-and-push:
+          context: docker-hub
+
