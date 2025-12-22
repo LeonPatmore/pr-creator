@@ -32,3 +32,4 @@ async def run_workflow(state: WorkflowState) -> WorkflowState:
     ensure_logging_configured()
     graph = build_graph()
     result = await graph.run(start_node=NextRepo(), state=state)
+    return result.state if hasattr(result, "state") else result
