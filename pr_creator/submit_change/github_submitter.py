@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -13,24 +12,18 @@ from dulwich.repo import Repo
 from github import Github
 
 from .base import SubmitChange
+from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_repo_slug(origin_url: str) -> Optional[str]:
-    if origin_url.startswith("git@github.com:"):
-        return origin_url.removeprefix("git@github.com:").removesuffix(".git")
-    if origin_url.startswith("https://github.com/"):
-        return origin_url.removeprefix("https://github.com/").removesuffix(".git")
-    return None
-
-
 def _token_push_url(origin_url: str, token: str, branch: str) -> Tuple[str, str]:
-    slug = _parse_repo_slug(origin_url)
+    push_url = token_auth_github_url(origin_url, token)
+    if not push_url:
+        raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
+    slug = github_slug_from_url(origin_url)
     if not slug:
         raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
-    encoded = urllib.parse.quote(token, safe="")
-    push_url = f"https://{encoded}:x-oauth-basic@github.com/{slug}.git"
     return push_url, slug
 
 
@@ -148,7 +141,7 @@ class GithubSubmitter(SubmitChange):
         remote_repo = None
         if self.github_token:
             gh = Github(self.github_token)
-            slug = _parse_repo_slug(origin)
+            slug = github_slug_from_url(origin)
             if slug:
                 remote_repo = gh.get_repo(slug)
                 if base_branch is None:
