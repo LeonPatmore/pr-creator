@@ -2,60 +2,19 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
-import subprocess
 import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Optional, Tuple
 
+from dulwich import porcelain
+from dulwich.config import StackedConfig
+from dulwich.repo import Repo
 from github import Github
 
 from .base import SubmitChange
 
 logger = logging.getLogger(__name__)
-
-
-def _run(cmd: list[str], cwd: Path) -> None:
-    logger.info("[submit] cwd=%s cmd=%s", cwd, " ".join(cmd))
-    subprocess.run(cmd, cwd=str(cwd), check=True)
-
-
-def _git_status_dirty(cwd: Path) -> bool:
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=str(cwd),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    dirty = bool(result.stdout.strip())
-    logger.info("[submit] status dirty=%s", dirty)
-    return dirty
-
-
-def _current_branch(cwd: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=str(cwd),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
-def _origin_url(cwd: Path) -> str:
-    result = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        cwd=str(cwd),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    url = result.stdout.strip()
-    logger.info("[submit] origin url=%s", url)
-    return url
 
 
 def _parse_repo_slug(origin_url: str) -> Optional[str]:
@@ -75,6 +34,91 @@ def _token_push_url(origin_url: str, token: str, branch: str) -> Tuple[str, str]
     return push_url, slug
 
 
+def _load_repo(repo_path: Path) -> Repo:
+    return Repo.discover(str(repo_path))
+
+
+def _git_status_dirty(repo: Repo) -> bool:
+    status = porcelain.status(repo)
+    dirty = bool(status.staged or status.unstaged or status.untracked)
+    logger.info("[submit] status dirty=%s", dirty)
+    return dirty
+
+
+def _origin_url(repo: Repo) -> str:
+    cfg: StackedConfig = repo.get_config()
+    url_bytes = cfg.get((b"remote", b"origin"), b"url")
+    url = url_bytes.decode()
+    logger.info("[submit] origin url=%s", url)
+    return url
+
+
+def _current_branch(repo: Repo) -> str:
+    head = repo.refs.read_ref(b"HEAD")
+    if head and head.startswith(b"refs/heads/"):
+        return head[len(b"refs/heads/") :].decode()
+    return "HEAD"
+
+
+def _config_value(
+    cfg: StackedConfig, section: tuple[bytes, ...], name: bytes
+) -> Optional[str]:
+    try:
+        value = cfg.get(section, name)
+    except KeyError:
+        return None
+    if isinstance(value, bytes):
+        return value.decode()
+    return str(value)
+
+
+def _ensure_identity(repo: Repo) -> tuple[str, str]:
+    cfg = repo.get_config()
+    name = os.environ.get("GIT_AUTHOR_NAME") or _config_value(cfg, (b"user",), b"name")
+    email = os.environ.get("GIT_AUTHOR_EMAIL") or _config_value(
+        cfg, (b"user",), b"email"
+    )
+    author = f"{name or 'pr-creator'} <{email or 'pr-creator@example.com'}>"
+    return author, author
+
+
+def _commit_changes(repo: Repo, message: str) -> None:
+    author, committer = _ensure_identity(repo)
+    porcelain.add(repo.path)  # stage all changes
+    porcelain.commit(
+        repo.path,
+        message=message,
+        author=author.encode(),
+        committer=committer.encode(),
+    )
+
+
+def _prepare_branch(repo: Repo, branch_prefix: str, base_branch: str) -> str:
+    current = _current_branch(repo)
+    logger.info("[submit] current branch=%s", current)
+    if current not in {"HEAD", base_branch} and not current.startswith("auto/"):
+        return current
+
+    branch = f"{branch_prefix}-{uuid.uuid4().hex[:8]}"
+    base_ref = f"refs/heads/{base_branch}".encode()
+    if base_ref not in repo.refs:
+        raise RuntimeError(f"Base branch {base_branch} not found in repository")
+    porcelain.branch_create(repo.path, branch.encode(), repo.refs[base_ref])
+    porcelain.checkout(repo.path, branch.encode())
+    return branch
+
+
+def _push_branch(repo: Repo, branch: str, token: Optional[str]) -> None:
+    if not token:
+        logger.warning("GITHUB_TOKEN not set; skipping push/PR")
+        return
+    origin = _origin_url(repo)
+    push_url, _ = _token_push_url(origin, token, branch)
+    refspec = f"refs/heads/{branch}:refs/heads/{branch}"
+    logger.info("[submit] pushing %s", refspec)
+    porcelain.push(repo.path, push_url, refspecs=[refspec])
+
+
 class GithubSubmitter(SubmitChange):
     def __init__(self) -> None:
         # If SUBMIT_PR_BASE is not set, defer to the repo default branch.
@@ -89,73 +133,39 @@ class GithubSubmitter(SubmitChange):
         self.branch_prefix = os.environ.get("SUBMIT_BRANCH_PREFIX", "auto/pr")
         self.github_token = os.environ.get("GITHUB_TOKEN")
 
-    def _ensure_tools(self) -> None:
-        if shutil.which("git") is None:
-            raise RuntimeError("git is required to submit changes")
-        # gh is optional; checked at PR creation time.
-
-    def _prepare_branch(self, repo_path: Path, base_branch: str) -> str:
-        current = _current_branch(repo_path)
-        logger.info("[submit] current branch=%s", current)
-        # If we're already on a non-base branch (and not an auto/ branch), reuse it.
-        if (
-            current != "HEAD"
-            and current != base_branch
-            and not current.startswith("auto/")
-        ):
-            return current
-
-        branch = f"{self.branch_prefix}-{uuid.uuid4().hex[:8]}"
-        _run(["git", "checkout", "-B", branch], repo_path)
-        return branch
-
-    def _commit_changes(self, repo_path: Path) -> None:
-        _run(["git", "add", "-A"], repo_path)
-        _run(["git", "commit", "-m", self.commit_message], repo_path)
-
-    def _push_branch(self, repo_path: Path, branch: str) -> None:
-        origin = _origin_url(repo_path)
-        token = self.github_token
-        if not token:
-            logger.warning("GITHUB_TOKEN not set; skipping push/PR")
-            return
-        push_url, _ = _token_push_url(origin, token, branch)
-        _run(["git", "push", "--set-upstream", push_url, branch], repo_path)
-
     def submit(self, repo_path: Path) -> None:
-        repo_path = Path(repo_path)
-        self._ensure_tools()
+        repo = _load_repo(Path(repo_path))
 
-        if _git_status_dirty(repo_path):
-            self._commit_changes(repo_path)
+        if _git_status_dirty(repo):
+            _commit_changes(repo, self.commit_message)
         else:
             logger.info("[submit] no changes to commit; skipping PR creation")
             return
 
-        origin = _origin_url(repo_path)
+        origin = _origin_url(repo)
 
         base_branch = self.base_branch
-        repo = None
+        remote_repo = None
         if self.github_token:
             gh = Github(self.github_token)
             slug = _parse_repo_slug(origin)
             if slug:
-                repo = gh.get_repo(slug)
+                remote_repo = gh.get_repo(slug)
                 if base_branch is None:
-                    base_branch = repo.default_branch
+                    base_branch = remote_repo.default_branch
         if base_branch is None:
             base_branch = "main"
 
-        branch = self._prepare_branch(repo_path, base_branch)
+        branch = _prepare_branch(repo, self.branch_prefix, base_branch)
 
-        self._push_branch(repo_path, branch)
+        _push_branch(repo, branch, self.github_token)
 
-        if not self.github_token or repo is None:
+        if not self.github_token or remote_repo is None:
             logger.warning("GITHUB_TOKEN not set; skipping PR creation")
             return
 
         logger.info("[submit] creating PR head=%s base=%s", branch, base_branch)
-        repo.create_pull(
+        remote_repo.create_pull(
             title=self.pr_title,
             body=self.pr_body,
             head=branch,

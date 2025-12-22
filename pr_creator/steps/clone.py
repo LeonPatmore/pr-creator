@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from dulwich import porcelain
 from pydantic_graph import BaseNode, End, GraphRunContext
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def clone_repo(repo_url: str, working_dir: Path) -> Path:
     if target.exists():
         target = working_dir / f"{name}-{uuid.uuid4().hex[:8]}"
     logger.info("Cloning %s -> %s", repo_url, target)
-    subprocess.run(["git", "clone", repo_url, str(target)], check=True)
+    porcelain.clone(repo_url, target, checkout=True)
     return target
 
 
