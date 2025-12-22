@@ -41,4 +41,13 @@ def load_prompts_from_config(
         raise ValueError(
             "Prompt config YAML must include change_prompt and relevance_prompt"
         )
+    logger.info(
+        "Loaded prompt config from %s/%s@%s:%s (change_prompt len=%s, relevance_prompt len=%s)",
+        owner,
+        repo,
+        ref,
+        path,
+        len(str(change_prompt)),
+        len(str(relevance_prompt)),
+    )
     return {"prompt": str(change_prompt), "relevance_prompt": str(relevance_prompt)}
