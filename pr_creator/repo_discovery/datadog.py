@@ -3,6 +3,9 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
+from datadog_api_client.v2 import ApiClient, Configuration
+from datadog_api_client.v2.api.service_definition_api import ServiceDefinitionApi
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATADOG_SITE = "datadoghq.com"
@@ -10,14 +13,43 @@ DEFAULT_DATADOG_SITE = "datadoghq.com"
 
 def _extract_repo_urls(service: dict) -> List[str]:
     attrs = service.get("attributes", {})
+    schema = attrs.get("schema", {}) or {}
+
     integrations = attrs.get("integrations", {}) or {}
     github = integrations.get("github", {}) or {}
+
     candidates = [
         github.get("url"),
         github.get("repository_url"),
         github.get("repository"),
     ]
+
+    # Service Catalog definitions expose repositories via the schema.
+    repos = schema.get("repos", []) or attrs.get("repos", []) or []
+    for repo in repos:
+        if isinstance(repo, dict):
+            candidates.append(repo.get("url"))
+
     return [c for c in candidates if c]
+
+
+def _service_matches_team(service: dict, team: str) -> bool:
+    """Datadog Service Catalog service has the team on the schema."""
+    attrs = service.get("attributes", {}) or {}
+    schema = attrs.get("schema", {}) or {}
+
+    candidates = [
+        attrs.get("team"),
+        attrs.get("dd_team"),
+        attrs.get("dd-team"),
+        schema.get("team"),
+        schema.get("dd_team"),
+        schema.get("dd-team"),
+    ]
+
+    return any(
+        isinstance(value, str) and value.lower() == team.lower() for value in candidates
+    )
 
 
 def discover_repos_from_datadog(
@@ -31,47 +63,25 @@ def discover_repos_from_datadog(
             "DATADOG_API_KEY and DATADOG_APP_KEY are required for discovery"
         )
 
-    try:
-        from datadog_api_client.v2 import ApiClient, Configuration  # type: ignore
-        from datadog_api_client.v2.api.services_api import ServicesApi  # type: ignore
-    except ImportError as exc:
-        raise ValueError(
-            "datadog-api-client is required for Datadog discovery; install it first."
-        ) from exc
-
     config = Configuration()
     config.api_key = {"apiKeyAuth": api_key, "appKeyAuth": app_key}
     config.server_variables["site"] = site.replace("https://", "").replace("api.", "")
 
     repos: set[str] = set()
-    page_size = 200
-    page_number = 0
+    page_size = 100
 
     with ApiClient(config) as client:
-        api = ServicesApi(client)
-        while True:
-            resp = api.list_services(
-                filter_team=team,
-                page_size=page_size,
-                page_number=page_number,
-            )
-            for service in resp.data or []:
-                service_dict = (
-                    service.to_dict() if hasattr(service, "to_dict") else service
-                )
-                for repo_url in _extract_repo_urls(service_dict):
-                    repos.add(repo_url)
-
-            data_len = len(resp.data or [])
-            total = None
-            if resp.meta and getattr(resp.meta, "page", None):
-                total = getattr(resp.meta.page, "total_filtered_count", None)
-
-            if data_len < page_size or (
-                total is not None and (page_number + 1) * page_size >= total
-            ):
-                break
-            page_number += 1
+        api = ServiceDefinitionApi(client)
+        for service in api.list_service_definitions_with_pagination(
+            page_size=page_size
+        ):
+            service_dict = service.to_dict() if hasattr(service, "to_dict") else service
+            if not isinstance(service_dict, dict):
+                continue
+            if not _service_matches_team(service_dict, team):
+                continue
+            for repo_url in _extract_repo_urls(service_dict):
+                repos.add(repo_url)
 
     logger.info("Datadog discovery for team %s found %d repos", team, len(repos))
     return sorted(repos)
