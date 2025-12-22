@@ -4,7 +4,7 @@ DOCKER ?= docker
 
 .PHONY: build-cursor-image
 build-cursor-image:
-	$(DOCKER) build -t $(IMAGE):$(TAG) .
+	$(DOCKER) build -f docker/cursor/Dockerfile -t $(IMAGE):$(TAG) .
 
 .PHONY: test-e2e
 test-e2e:

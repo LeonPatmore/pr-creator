@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+After each code change, run in order: make lint -> make format -> make test-e2e; ensure tests pass before proceeding.

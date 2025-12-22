@@ -1,6 +1,0 @@
----
-alwaysApply: true
----
-
-After every change, run the end-to-end test.
-Ensure the test passes; if it fails, address the issues and re-run.
