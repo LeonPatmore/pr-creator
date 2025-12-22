@@ -31,7 +31,16 @@ def parse_args() -> argparse.Namespace:
         "--prompt-config-path",
         help="Path to the YAML file in the prompt config repo",
     )
-    parser.add_argument("--repo", action="append", required=True)
+    parser.add_argument("--repo", action="append", required=False)
+    parser.add_argument(
+        "--datadog-team",
+        help="Datadog team name for repo discovery (requires DATADOG_API_KEY and DATADOG_APP_KEY)",
+    )
+    parser.add_argument(
+        "--datadog-site",
+        default="https://api.datadoghq.com",
+        help="Datadog site base URL (default: https://api.datadoghq.com)",
+    )
     parser.add_argument("--working-dir", default=".repos")
     parser.add_argument(
         "--log-level", default="INFO", help="Logging level (default: INFO)"
@@ -74,8 +83,10 @@ def main() -> None:
     state = WorkflowState(
         prompt=prompt,
         relevance_prompt=relevance_prompt,
-        repos=list(args.repo),
+        repos=list(args.repo or []),
         working_dir=Path(args.working_dir),
+        datadog_team=args.datadog_team,
+        datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
     )
     final_state = asyncio.run(run_workflow(state))
     summary = {

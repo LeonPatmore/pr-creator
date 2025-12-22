@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -14,3 +14,5 @@ class WorkflowState:
     processed: List[str] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)
     created_prs: List[Dict[str, str]] = field(default_factory=list)
+    datadog_team: Optional[str] = None
+    datadog_site: str = "datadoghq.com"

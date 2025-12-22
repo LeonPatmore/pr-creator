@@ -10,6 +10,7 @@ pydantic-graph = "*"
 dulwich = "*"
 requests = "*"
 pyyaml = "*"
+datadog-api-client = "*"
 
 [dev-packages]
 pytest = "*"

@@ -5,4 +5,3 @@ RUN curl https://cursor.com/install -fsS | bash
 ENV PATH="/root/.local/bin:${PATH}"
 RUN cursor-agent --version || true
 CMD ["bash"]
-

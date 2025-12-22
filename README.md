@@ -16,6 +16,7 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `CHANGE_AGENT` — choose change agent; default `cursor`.
 - `CURSOR_IMAGE` — docker image for cursor agent; default `cursor-cli:latest`.
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
+- `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
 - `SUBMIT_CHANGE` — submitter; default `github`.
 - `SUBMIT_PR_BASE` — target base branch; default repo default.
 - `SUBMIT_COMMIT_MESSAGE` — commit message; default `Automated changes`.
@@ -28,6 +29,28 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `make test-e2e` — run the e2e pytest (requires env vars set).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).
+
+### CLI arguments
+**Prompts**
+- `--prompt` — main prompt text. Required unless using prompt config.
+- `--relevance-prompt` — relevance filter prompt. Required unless using prompt config.
+
+**Prompt config (alternative to passing prompts directly)**
+- `--prompt-config-owner` — GitHub owner of the prompt config repo. Must be set with `--prompt-config-repo` and `--prompt-config-path`.
+- `--prompt-config-repo` — GitHub repo name containing the prompt config file.
+- `--prompt-config-ref` — git ref for the prompt config file; default `main`.
+- `--prompt-config-path` — path to the YAML prompt config file inside the repo.
+
+**Repositories**
+- `--repo` — repository URL to process. Can be passed multiple times; required if not using Datadog discovery.
+
+**Datadog discovery**
+- `--datadog-team` — Datadog team name to discover repos (requires `DATADOG_API_KEY` and `DATADOG_APP_KEY`).
+- `--datadog-site` — Datadog API base URL; default `https://api.datadoghq.com`.
+
+**Runtime**
+- `--working-dir` — where repos are cloned; default `.repos`.
+- `--log-level` — logging level; default `INFO`.
 
 ### Example (Docker)
 

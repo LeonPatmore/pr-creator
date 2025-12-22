@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "88ac4050e2d4b24a19e0e0ca0bbf3bf2faaadc61903b6c1dead653252f8cb8ee"
+            "sha256": "a0b38a68ab08f67dd07565becf60f9ffdcbcb6db6751b1ac9532f392d77f23ce"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -562,6 +562,15 @@
             ],
             "markers": "python_version >= '3.10'",
             "version": "==4.4.1"
+        },
+        "datadog-api-client": {
+            "hashes": [
+                "sha256:899acdbfdd3c861ac9cad8cea9aeb4291a0c096f985a6868a6eb4d433943de08",
+                "sha256:cc676d4f6269463a9772c0661405f5ebb0e149ff23c820926e89dc088da3dc49"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==2.48.0"
         },
         "diskcache": {
             "hashes": [
