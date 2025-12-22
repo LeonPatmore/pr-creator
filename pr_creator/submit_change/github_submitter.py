@@ -83,6 +83,7 @@ def _commit_changes(repo: Repo, message: str) -> None:
         message=message,
         author=author.encode(),
         committer=committer.encode(),
+        sign=False,  # Disable GPG signing to avoid gpg module dependency
     )
 
 

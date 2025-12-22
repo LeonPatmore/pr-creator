@@ -14,7 +14,7 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 **Optional**
 - `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` — author/committer; defaults to pr-creator placeholders if unset.
 - `CHANGE_AGENT` — choose change agent; default `cursor`.
-- `CURSOR_IMAGE` — docker image for cursor agent; default `cursor-cli:latest`.
+- `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
 - `SUBMIT_CHANGE` — submitter; default `github`.

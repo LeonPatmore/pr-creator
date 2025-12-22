@@ -11,6 +11,7 @@ dulwich = "*"
 requests = "*"
 pyyaml = "*"
 datadog-api-client = "*"
+docker = "*"
 
 [dev-packages]
 pytest = "*"

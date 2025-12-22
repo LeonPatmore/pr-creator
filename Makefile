@@ -1,4 +1,4 @@
-IMAGE ?= cursor-cli
+IMAGE ?= leonpatmore2/cursor-agent
 APP_IMAGE ?= pr-creator
 TAG ?= latest
 DOCKER ?= docker
