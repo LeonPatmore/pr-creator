@@ -25,4 +25,3 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `make test-e2e` — run the e2e pytest (requires env vars set).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).
-

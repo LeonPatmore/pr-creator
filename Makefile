@@ -8,7 +8,7 @@ build-cursor-image:
 
 .PHONY: test-e2e
 test-e2e:
-	pipenv run pytest tests/test_cli_e2e.py -q
+	pipenv run pytest -s -o log_cli=true --log-cli-level=INFO tests/test_cli_e2e.py
 
 .PHONY: lint
 lint:

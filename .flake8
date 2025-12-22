@@ -2,5 +2,3 @@
 max-line-length = 120
 extend-ignore = W391
 exclude = .git,__pycache__,.venv,.repos,build,dist
-
-
