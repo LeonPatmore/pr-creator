@@ -1,2 +1,4 @@
 change_prompt: "Append to README: TEST_MARKER_SAMPLE"
 relevance_prompt: "Any repo"
+# Optional: change_id ensures re-runs use the same branch name
+# change_id: "my-unique-change-id"

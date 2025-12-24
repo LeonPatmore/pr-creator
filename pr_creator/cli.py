@@ -45,6 +45,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--log-level", default="INFO", help="Logging level (default: INFO)"
     )
+    parser.add_argument(
+        "--change-id",
+        help="Change ID to use for static branch names (ensures re-runs use the same branch)",
+    )
     return parser.parse_args()
 
 
@@ -53,6 +57,7 @@ def main() -> None:
     configure_logging(args.log_level, force=True)
     token = os.environ.get("GITHUB_TOKEN")
 
+    change_id = args.change_id
     if args.prompt_config_owner or args.prompt_config_repo or args.prompt_config_path:
         if not (
             args.prompt_config_owner
@@ -72,6 +77,9 @@ def main() -> None:
         )
         prompt = prompts["prompt"]
         relevance_prompt = prompts["relevance_prompt"]
+        # change_id from config takes precedence over CLI arg
+        if "change_id" in prompts:
+            change_id = prompts["change_id"]
     else:
         if not args.prompt or not args.relevance_prompt:
             raise SystemExit(
@@ -87,6 +95,7 @@ def main() -> None:
         working_dir=Path(args.working_dir),
         datadog_team=args.datadog_team,
         datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
+        change_id=change_id,
     )
     final_state = asyncio.run(run_workflow(state))
     summary = {

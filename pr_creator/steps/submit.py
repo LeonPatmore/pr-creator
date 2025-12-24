@@ -18,7 +18,11 @@ class SubmitChanges(BaseNode):
         path = ctx.state.cloned[self.repo_url]
         logger.info("Submitting changes for %s at %s", self.repo_url, path)
         submitter = get_submitter()
-        result = submitter.submit(path)
+        result = submitter.submit(
+            path,
+            change_prompt=ctx.state.prompt,
+            change_id=ctx.state.change_id,
+        )
         if result:
             ctx.state.created_prs.append(result)
         from .cleanup import CleanupRepo

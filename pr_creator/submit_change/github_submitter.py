@@ -10,6 +10,7 @@ from dulwich import porcelain
 from dulwich.config import StackedConfig
 from dulwich.repo import Repo
 from github import Github
+from github.Repository import Repository
 
 from .base import SubmitChange
 from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
@@ -17,40 +18,38 @@ from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
 logger = logging.getLogger(__name__)
 
 
-def _token_push_url(origin_url: str, token: str, branch: str) -> Tuple[str, str]:
-    push_url = token_auth_github_url(origin_url, token)
-    if not push_url:
-        raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
-    slug = github_slug_from_url(origin_url)
-    if not slug:
-        raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
-    return push_url, slug
-
-
 def _load_repo(repo_path: Path) -> Repo:
     return Repo.discover(str(repo_path))
-
-
-def _git_status_dirty(repo: Repo) -> bool:
-    status = porcelain.status(repo)
-    dirty = bool(status.staged or status.unstaged or status.untracked)
-    logger.info("[submit] status dirty=%s", dirty)
-    return dirty
 
 
 def _origin_url(repo: Repo) -> str:
     cfg: StackedConfig = repo.get_config()
     url_bytes = cfg.get((b"remote", b"origin"), b"url")
-    url = url_bytes.decode()
-    logger.info("[submit] origin url=%s", url)
-    return url
+    return url_bytes.decode()
 
 
-def _current_branch(repo: Repo) -> str:
+def _current_branch(repo: Repo, branch_prefix: str = "auto/pr", change_id: Optional[str] = None) -> str:
+    """Get the current branch name."""
+    # If we have change_id, construct the branch name
+    if change_id:
+        expected_branch = f"{branch_prefix}-{change_id}"
+        branch_ref = f"refs/heads/{expected_branch}".encode()
+        if branch_ref in repo.refs:
+            return expected_branch
+    
+    # Try to get branch from HEAD
     head = repo.refs.read_ref(b"HEAD")
     if head and head.startswith(b"refs/heads/"):
         return head[len(b"refs/heads/") :].decode()
-    return "HEAD"
+    
+    # If HEAD is detached, try to find which branch it points to
+    head_sha = repo.refs.read_ref(b"HEAD")
+    for ref_name in repo.refs.keys():
+        if ref_name.startswith(b"refs/heads/"):
+            if repo.refs[ref_name] == head_sha:
+                return ref_name[len(b"refs/heads/") :].decode()
+    
+    raise RuntimeError("Could not determine current branch name")
 
 
 def _config_value(
@@ -75,47 +74,79 @@ def _ensure_identity(repo: Repo) -> tuple[str, str]:
     return author, author
 
 
+def _git_status_dirty(repo: Repo) -> bool:
+    status = porcelain.status(repo)
+    return bool(status.staged or status.unstaged or status.untracked)
+
+
 def _commit_changes(repo: Repo, message: str) -> None:
     author, committer = _ensure_identity(repo)
-    porcelain.add(repo.path)  # stage all changes
+    porcelain.add(repo.path)
     porcelain.commit(
         repo.path,
         message=message,
         author=author.encode(),
         committer=committer.encode(),
-        sign=False,  # Disable GPG signing to avoid gpg module dependency
+        sign=False,
     )
 
 
-def _prepare_branch(repo: Repo, branch_prefix: str, base_branch: str) -> str:
-    current = _current_branch(repo)
-    logger.info("[submit] current branch=%s", current)
-    if current not in {"HEAD", base_branch} and not current.startswith("auto/"):
-        return current
-
-    branch = f"{branch_prefix}-{uuid.uuid4().hex[:8]}"
-    base_ref = f"refs/heads/{base_branch}".encode()
-    if base_ref not in repo.refs:
-        raise RuntimeError(f"Base branch {base_branch} not found in repository")
-    porcelain.branch_create(repo.path, branch.encode(), repo.refs[base_ref])
-    porcelain.checkout(repo.path, branch.encode())
-    return branch
-
-
-def _push_branch(repo: Repo, branch: str, token: Optional[str]) -> None:
-    if not token:
-        logger.warning("GITHUB_TOKEN not set; skipping push/PR")
-        return
-    origin = _origin_url(repo)
-    push_url, _ = _token_push_url(origin, token, branch)
+def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
+    """Push branch to remote."""
+    push_url = token_auth_github_url(origin_url, token)
+    if not push_url:
+        raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
+    
     refspec = f"refs/heads/{branch}:refs/heads/{branch}"
     logger.info("[submit] pushing %s", refspec)
     porcelain.push(repo.path, push_url, refspecs=[refspec])
 
 
+def _build_pr_body(base_body: str, change_prompt: Optional[str]) -> str:
+    """Build PR body with optional change prompt."""
+    if change_prompt:
+        return f"{base_body}\n\n## Change Prompt\n\n{change_prompt}"
+    return base_body
+
+
+def _find_existing_pr(
+    remote_repo: Repository, branch: str, base_branch: str, state: str = "open"
+) -> Optional[Repository.PullRequest]:
+    """Find existing PR for the given branch."""
+    try:
+        prs = [
+            pr for pr in remote_repo.get_pulls(
+                state=state, head=f"{remote_repo.owner.login}:{branch}"
+            )
+            if pr.head.ref == branch and pr.base.ref == base_branch
+        ]
+        return prs[0] if prs else None
+    except Exception as e:
+        logger.warning("[submit] failed to find existing PR: %s", e)
+        return None
+
+
+def _get_remote_repo_and_base_branch(
+    origin: str, github_token: Optional[str], base_branch: Optional[str]
+) -> Tuple[Optional[Repository], str]:
+    """Get remote repository and determine base branch."""
+    if not github_token:
+        return None, base_branch or "main"
+    
+    gh = Github(github_token)
+    slug = github_slug_from_url(origin)
+    if not slug:
+        return None, base_branch or "main"
+    
+    remote_repo = gh.get_repo(slug)
+    if base_branch is None:
+        base_branch = remote_repo.default_branch
+    
+    return remote_repo, base_branch or "main"
+
+
 class GithubSubmitter(SubmitChange):
     def __init__(self) -> None:
-        # If SUBMIT_PR_BASE is not set, defer to the repo default branch.
         self.base_branch = os.environ.get("SUBMIT_PR_BASE") or None
         self.commit_message = os.environ.get(
             "SUBMIT_COMMIT_MESSAGE", "Automated changes"
@@ -127,42 +158,73 @@ class GithubSubmitter(SubmitChange):
         self.branch_prefix = os.environ.get("SUBMIT_BRANCH_PREFIX", "auto/pr")
         self.github_token = os.environ.get("GITHUB_TOKEN")
 
-    def submit(self, repo_path: Path) -> Optional[Dict[str, str]]:
+    def submit(
+        self,
+        repo_path: Path,
+        change_prompt: str | None = None,
+        change_id: str | None = None,
+    ) -> Optional[Dict[str, str]]:
         repo = _load_repo(Path(repo_path))
-
-        if _git_status_dirty(repo):
-            _commit_changes(repo, self.commit_message)
-        else:
+        origin = _origin_url(repo)
+        
+        # Get current branch (clone step already checked it out)
+        # Use change_id if available to construct branch name
+        branch = _current_branch(repo, self.branch_prefix, change_id)
+        logger.info("[submit] current branch=%s", branch)
+        
+        # Get remote repo and base branch
+        remote_repo, base_branch = _get_remote_repo_and_base_branch(
+            origin, self.github_token, self.base_branch
+        )
+        
+        pr_body = _build_pr_body(self.pr_body, change_prompt)
+        
+        # Check if PR already exists (before committing/pushing)
+        # This allows updating PR description even if there are no code changes
+        if remote_repo:
+            existing_pr = _find_existing_pr(remote_repo, branch, base_branch, state="open")
+            if existing_pr:
+                logger.info("[submit] PR already exists for branch %s, updating description", branch)
+                if change_prompt:
+                    existing_pr.edit(body=pr_body)
+                    logger.info("[submit] Updated PR description with latest prompt")
+                # Still commit and push if there are changes
+                if _git_status_dirty(repo):
+                    _commit_changes(repo, self.commit_message)
+                    _push_branch(repo, branch, self.github_token, origin)
+                return {"repo_url": origin, "branch": branch, "pr_url": existing_pr.html_url}
+        
+        # No existing PR - check if there are changes to commit
+        if not _git_status_dirty(repo):
             logger.info("[submit] no changes to commit; skipping PR creation")
             return None
-
-        origin = _origin_url(repo)
-
-        base_branch = self.base_branch
-        remote_repo = None
-        if self.github_token:
-            gh = Github(self.github_token)
-            slug = github_slug_from_url(origin)
-            if slug:
-                remote_repo = gh.get_repo(slug)
-                if base_branch is None:
-                    base_branch = remote_repo.default_branch
-        if base_branch is None:
-            base_branch = "main"
-
-        branch = _prepare_branch(repo, self.branch_prefix, base_branch)
-
-        _push_branch(repo, branch, self.github_token)
-
-        if not self.github_token or remote_repo is None:
+        
+        # Commit and push changes
+        _commit_changes(repo, self.commit_message)
+        _push_branch(repo, branch, self.github_token, origin)
+        
+        if not remote_repo:
             logger.warning("GITHUB_TOKEN not set; skipping PR creation")
             return {"repo_url": origin, "branch": branch, "pr_url": None}
-
+        
+        # Create new PR
         logger.info("[submit] creating PR head=%s base=%s", branch, base_branch)
-        pr = remote_repo.create_pull(
-            title=self.pr_title,
-            body=self.pr_body,
-            head=branch,
-            base=base_branch,
-        )
-        return {"repo_url": origin, "branch": branch, "pr_url": pr.html_url}
+        try:
+            pr = remote_repo.create_pull(
+                title=self.pr_title,
+                body=pr_body,
+                head=branch,
+                base=base_branch,
+            )
+            return {"repo_url": origin, "branch": branch, "pr_url": pr.html_url}
+        except Exception as e:
+            # PR creation failed - try to find existing PR (might have been created concurrently)
+            logger.warning("[submit] PR creation failed: %s, attempting to find existing PR", e)
+            existing_pr = _find_existing_pr(remote_repo, branch, base_branch, state="all")
+            if existing_pr:
+                logger.info("[submit] Found existing PR: %s", existing_pr.html_url)
+                if change_prompt:
+                    existing_pr.edit(body=pr_body)
+                    logger.info("[submit] Updated PR description with latest prompt")
+                return {"repo_url": origin, "branch": branch, "pr_url": existing_pr.html_url}
+            raise

@@ -16,3 +16,4 @@ class WorkflowState:
     created_prs: List[Dict[str, str]] = field(default_factory=list)
     datadog_team: Optional[str] = None
     datadog_site: str = "datadoghq.com"
+    change_id: Optional[str] = None

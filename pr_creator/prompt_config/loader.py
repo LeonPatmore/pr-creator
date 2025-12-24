@@ -37,17 +37,22 @@ def load_prompts_from_config(
     data: Dict[str, Any] = _load_yaml_from_github(owner, repo, ref, path, token)
     change_prompt = data.get("change_prompt") or data.get("prompt")
     relevance_prompt = data.get("relevance_prompt")
+    change_id = data.get("change_id")
     if not change_prompt or not relevance_prompt:
         raise ValueError(
             "Prompt config YAML must include change_prompt and relevance_prompt"
         )
     logger.info(
-        "Loaded prompt config from %s/%s@%s:%s (change_prompt len=%s, relevance_prompt len=%s)",
+        "Loaded prompt config from %s/%s@%s:%s (change_prompt len=%s, relevance_prompt len=%s%s)",
         owner,
         repo,
         ref,
         path,
         len(str(change_prompt)),
         len(str(relevance_prompt)),
+        f", change_id={change_id}" if change_id else "",
     )
-    return {"prompt": str(change_prompt), "relevance_prompt": str(relevance_prompt)}
+    result = {"prompt": str(change_prompt), "relevance_prompt": str(relevance_prompt)}
+    if change_id:
+        result["change_id"] = str(change_id)
+    return result

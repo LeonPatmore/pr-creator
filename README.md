@@ -15,6 +15,7 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` — author/committer; defaults to pr-creator placeholders if unset.
 - `CHANGE_AGENT` — choose change agent; default `cursor`.
 - `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
+- `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
 - `SUBMIT_CHANGE` — submitter; default `github`.
@@ -40,6 +41,9 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `--prompt-config-repo` — GitHub repo name containing the prompt config file.
 - `--prompt-config-ref` — git ref for the prompt config file; default `main`.
 - `--prompt-config-path` — path to the YAML prompt config file inside the repo.
+
+**Change ID (for static branches)**
+- `--change-id` — Change ID to use for static branch names. When provided, ensures re-runs use the same branch name (format: `{branch_prefix}-{change_id}`). Can also be set in prompt config YAML (takes precedence over CLI arg).
 
 **Repositories**
 - `--repo` — repository URL to process. Can be passed multiple times; required if not using Datadog discovery.
