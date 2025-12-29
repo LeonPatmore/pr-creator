@@ -5,7 +5,11 @@ from pathlib import Path
 import docker
 
 from .base import ChangeAgent
-from pr_creator.cursor_config import get_cursor_image, get_cursor_model, get_cursor_env_vars
+from pr_creator.cursor_config import (
+    get_cursor_image,
+    get_cursor_model,
+    get_cursor_env_vars,
+)
 
 
 class CursorChangeAgent(ChangeAgent):

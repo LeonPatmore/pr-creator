@@ -18,11 +18,10 @@ def get_cursor_env_vars() -> Dict[str, str]:
     """Collect environment variables for Cursor agent."""
     env_keys_str = os.environ.get("CURSOR_ENV_KEYS", "CURSOR_API_KEY")
     env_keys = [k.strip() for k in env_keys_str.split(",") if k.strip()]
-    
+
     env_vars: Dict[str, str] = {}
     for key in env_keys:
         if key in os.environ:
             env_vars[key] = os.environ[key]
-    
-    return env_vars
 
+    return env_vars

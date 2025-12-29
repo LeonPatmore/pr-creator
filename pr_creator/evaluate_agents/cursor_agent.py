@@ -6,7 +6,11 @@ from pathlib import Path
 import docker
 
 from .base import EvaluateAgent
-from pr_creator.cursor_config import get_cursor_image, get_cursor_model, get_cursor_env_vars
+from pr_creator.cursor_config import (
+    get_cursor_image,
+    get_cursor_model,
+    get_cursor_env_vars,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,29 +66,29 @@ def _parse_decision(output: str) -> bool:
     Prioritizes final answer markers like **yes** or **no**, then checks from the end backwards.
     """
     output_lower = output.lower()
-    
+
     # First, check for bold markers (common format for final answers)
     if "**yes**" in output_lower or "**y**" in output_lower:
         return True
     if "**no**" in output_lower or "**n**" in output_lower:
         return False
-    
+
     # Parse from the end backwards to find the final answer
     # This handles cases where "yes" or "no" appear in the middle of reasoning
     words = output_lower.replace(".", " ").replace(",", " ").split()
-    
+
     # Check last 10 words first (likely to contain the final answer)
     for word in reversed(words[-10:]):
         if word in {"yes", "y", "true"}:
             return True
         if word in {"no", "n", "false"}:
             return False
-    
+
     # Fallback: check all words (original behavior)
     for word in words:
         if word in {"yes", "y", "true"}:
             return True
         if word in {"no", "n", "false"}:
             return False
-    
+
     return False

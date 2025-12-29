@@ -22,3 +22,12 @@ lint:
 .PHONY: format
 format:
 	pipenv run black .
+
+.PHONY: build
+build:
+	pipenv run python -m build
+
+.PHONY: upload
+upload: build
+	pipenv run twine check dist/*
+	pipenv run twine upload dist/*

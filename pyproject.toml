@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multi-repo-pr-creator"
+version = "0.1.0"
+description = "Simple workflow runner that applies change agents and opens PRs."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Leon Patmore" }]
+license = { text = "MIT" }
+keywords = ["pull-requests", "automation", "github", "agents"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "PyGithub",
+  "pydantic-graph",
+  "dulwich",
+  "PyYAML",
+  "docker",
+  "datadog-api-client",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "flake8", "black"]
+
+[project.scripts]
+pr-creator = "pr_creator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/LeonPatmore/pr-creator"
+Repository = "https://github.com/LeonPatmore/pr-creator"
+Issues = "https://github.com/LeonPatmore/pr-creator/issues"
+
+[tool.setuptools.packages.find]
+include = ["pr_creator*"]

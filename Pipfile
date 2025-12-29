@@ -17,6 +17,8 @@ docker = "*"
 pytest = "*"
 flake8 = "*"
 black = "*"
+twine = "*"
+build = "*"
 
 [requires]
 python_version = "3.14"

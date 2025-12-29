@@ -13,7 +13,11 @@ from .workflow import run_workflow
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", required=False)
-    parser.add_argument("--relevance-prompt", required=False)
+    parser.add_argument(
+        "--relevance-prompt",
+        required=False,
+        help="Prompt used to filter repos for relevance; leave empty to treat all as relevant",
+    )
     parser.add_argument(
         "--prompt-config-owner",
         help="GitHub owner of the prompt config repo",
@@ -76,17 +80,16 @@ def main() -> None:
             token,
         )
         prompt = prompts["prompt"]
-        relevance_prompt = prompts["relevance_prompt"]
+        relevance_prompt = prompts.get("relevance_prompt") or ""
         # change_id from config takes precedence over CLI arg
         if "change_id" in prompts:
             change_id = prompts["change_id"]
     else:
-        if not args.prompt or not args.relevance_prompt:
-            raise SystemExit(
-                "--prompt and --relevance-prompt are required when no prompt config is provided"
-            )
+        if not args.prompt:
+            raise SystemExit("--prompt is required when no prompt config is provided")
         prompt = args.prompt
-        relevance_prompt = args.relevance_prompt
+        # Empty or missing relevance prompt => treat all repos as relevant
+        relevance_prompt = args.relevance_prompt or ""
 
     state = WorkflowState(
         prompt=prompt,
