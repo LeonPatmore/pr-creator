@@ -12,7 +12,11 @@ from github import Auth, Github
 from github.Repository import Repository
 
 from .base import SubmitChange
-from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
+from pr_creator.git_urls import (
+    github_slug_from_url,
+    strip_auth_from_url,
+    token_auth_github_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +141,23 @@ class GithubSubmitter(SubmitChange):
         repo_path: Path,
         change_prompt: str | None = None,
         change_id: str | None = None,
+        branch: str | None = None,
     ) -> Optional[Dict[str, str]]:
         repo = _load_repo(Path(repo_path))
-        origin = _origin_url(repo)
+        origin = strip_auth_from_url(_origin_url(repo))
 
-        # Get current branch (clone step already checked it out)
+        # Ensure we are on the intended branch (change agents may checkout base)
+        if branch:
+            desired_ref = f"refs/heads/{branch}".encode()
+            if desired_ref in repo.refs:
+                porcelain.checkout_branch(repo, branch, force=True)
+            else:
+                logger.warning(
+                    "[submit] requested branch %s not found locally; using current HEAD",
+                    branch,
+                )
+
+        # Get current branch (clone step already checked it out; we may have re-checked out above)
         branch = _current_branch(repo)
         logger.info("[submit] current branch=%s", branch)
 
@@ -159,6 +175,10 @@ class GithubSubmitter(SubmitChange):
 
         # Commit and push changes
         _commit_changes(repo, self.commit_message)
+        if not self.github_token:
+            logger.warning("GITHUB_TOKEN not set; skipping push/PR creation")
+            return {"repo_url": origin, "branch": branch, "pr_url": None}
+
         _push_branch(repo, branch, self.github_token, origin)
 
         if not remote_repo:

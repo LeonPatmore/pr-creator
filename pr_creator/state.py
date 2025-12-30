@@ -10,6 +10,7 @@ class WorkflowState:
     repos: List[str]
     working_dir: Path
     cloned: Dict[str, Path] = field(default_factory=dict)
+    branches: Dict[str, str] = field(default_factory=dict)
     relevant: List[str] = field(default_factory=list)
     processed: List[str] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)

@@ -16,6 +16,23 @@ def github_slug_from_url(url: str) -> Optional[str]:
     return None
 
 
+def strip_auth_from_url(url: str) -> str:
+    """Remove any embedded username/password/token from a URL."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return url
+        hostname = parsed.hostname or ""
+        if not hostname:
+            return url
+        netloc = hostname
+        if parsed.port:
+            netloc = f"{hostname}:{parsed.port}"
+        return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+    except Exception:
+        return url
+
+
 def token_auth_github_url(url: str, token: str) -> Optional[str]:
     """Return HTTPS URL with embedded token for GitHub operations."""
     slug = github_slug_from_url(url)

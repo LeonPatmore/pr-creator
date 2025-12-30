@@ -22,6 +22,7 @@ class SubmitChanges(BaseNode):
             path,
             change_prompt=ctx.state.prompt,
             change_id=ctx.state.change_id,
+            branch=ctx.state.branches.get(self.repo_url),
         )
         if result:
             ctx.state.created_prs.append(result)

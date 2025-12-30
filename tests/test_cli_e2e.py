@@ -21,15 +21,6 @@ def _parse_owner_repo(repo_url: str) -> Optional[Tuple[str, str]]:
     return None
 
 
-def _docker_available() -> bool:
-    try:
-        client = docker.from_env()
-        client.ping()
-        return True
-    except Exception:
-        return False
-
-
 def _run_cli_and_assert_pr(
     repo_arg: str, repo_slug: str, env: dict, branch_prefix: str
 ) -> None:
@@ -81,10 +72,7 @@ def _run_cli_and_assert_pr(
 def test_cli_creates_pr_and_cleans_up(use_repo_name_only: bool) -> None:
     required_env = ["GITHUB_TOKEN", "CURSOR_API_KEY"]
     missing = [k for k in required_env if not os.environ.get(k)]
-    if missing:
-        pytest.skip(f"Missing required env vars: {', '.join(missing)}")
-    if not _docker_available():
-        pytest.skip("Docker is not available; skipping CLI e2e")
+    assert not missing, f"Missing required env vars: {', '.join(missing)}"
 
     repo_url = os.environ.get(
         "TEST_REPO_URL", "https://github.com/LeonPatmore/cheap-ai-agents-aws"

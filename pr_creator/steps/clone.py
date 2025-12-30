@@ -17,6 +17,12 @@ from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CloneResult:
+    path: Path
+    branch: str
+
+
 def ensure_dir(path: Path) -> None:
     """Ensure directory exists."""
     path.mkdir(parents=True, exist_ok=True)
@@ -86,7 +92,7 @@ def _get_default_branch(repo_url: str, token: Optional[str]) -> str:
 
 def clone_repo(
     repo_url: str, working_dir: Path, change_id: Optional[str] = None
-) -> Path:
+) -> CloneResult:
     """Clone a repository and checkout the appropriate branch."""
     target = _get_target_path(repo_url, working_dir)
     clone_url = _get_clone_url(repo_url)
@@ -172,7 +178,11 @@ def clone_repo(
         # Ensure HEAD persists on the new branch
         repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
 
-    return target
+    # Do not rely on HEAD being a symbolic ref here: some porcelain operations can leave
+    # HEAD detached/non-symbolic even though the intended branch is known.
+    if branch_to_checkout:
+        return CloneResult(path=target, branch=branch_to_checkout)
+    return CloneResult(path=target, branch=new_branch)
 
 
 def _branch_exists_remotely(repo_url: str, change_id: Optional[str]) -> bool:
@@ -190,8 +200,9 @@ class CloneRepo(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         """Clone repository and determine next step based on branch existence."""
-        path = clone_repo(self.repo_url, ctx.state.working_dir, ctx.state.change_id)
-        ctx.state.cloned[self.repo_url] = path
+        result = clone_repo(self.repo_url, ctx.state.working_dir, ctx.state.change_id)
+        ctx.state.cloned[self.repo_url] = result.path
+        ctx.state.branches[self.repo_url] = result.branch
 
         if _branch_exists_remotely(self.repo_url, ctx.state.change_id):
             logger.info(
