@@ -34,5 +34,5 @@ class CursorChangeAgent(ChangeAgent):
             volumes={repo_abs: {"bind": "/workspace", "mode": "rw"}},
             working_dir="/workspace",
             environment=env_vars,
-            remove=True,
+            remove=False,
         )
