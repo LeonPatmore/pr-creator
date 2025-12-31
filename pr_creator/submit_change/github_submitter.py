@@ -74,9 +74,23 @@ def _git_status_dirty(repo: Repo) -> bool:
     return bool(status.staged or status.unstaged or status.untracked)
 
 
-def _commit_changes(repo: Repo, message: str) -> None:
+def _index_has_changes_vs_head(repo: Repo) -> bool:
+    """Return True if the index differs from HEAD (i.e., there is something to commit)."""
+    head_commit = repo[repo.head()]
+    head_tree = head_commit.tree
+    index = repo.open_index()
+    return any(index.changes_from_tree(repo.object_store, head_tree))
+
+
+def _commit_changes_if_needed(repo: Repo, message: str) -> bool:
     author, committer = _ensure_identity(repo)
     porcelain.add(repo.path)
+
+    # Be strict: only commit when the staged/index state actually differs from HEAD.
+    # This avoids empty/no-op commits in cases where `status()` can be misleading.
+    if not _index_has_changes_vs_head(repo):
+        return False
+
     porcelain.commit(
         repo.path,
         message=message,
@@ -84,6 +98,7 @@ def _commit_changes(repo: Repo, message: str) -> None:
         committer=committer.encode(),
         sign=False,
     )
+    return True
 
 
 def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
@@ -175,13 +190,19 @@ class GithubSubmitter(SubmitChange):
         pr_title_final = pr_title or "Automated changes"
         commit_message_final = commit_message or "Automated changes"
 
-        # No existing PR - check if there are changes to commit
+        # Commit only when there is something to commit.
+        # Note: `status()` is a cheap pre-check, but we still double-check after staging.
         if not _git_status_dirty(repo):
             logger.info("[submit] no changes to commit; skipping PR creation")
             return None
 
-        # Commit and push changes
-        _commit_changes(repo, commit_message_final)
+        committed = _commit_changes_if_needed(repo, commit_message_final)
+        if not committed:
+            logger.info(
+                "[submit] no staged changes vs HEAD; skipping commit/PR creation"
+            )
+            return None
+
         if not self.github_token:
             logger.warning("GITHUB_TOKEN not set; skipping push/PR creation")
             return {"repo_url": origin, "branch": branch, "pr_url": None}
