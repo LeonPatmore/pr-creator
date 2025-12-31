@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class CursorNamingAgent(NamingAgent):
-    def generate_short_desc(self, prompt: str) -> str:
+    def generate_short_desc(self, prompt: str) -> str | None:
         instruction = (
             "You are generating a short description for a change prompt.\n"
             "- Produce a single JSON object ONLY, no extra text.\n"
@@ -22,7 +22,7 @@ class CursorNamingAgent(NamingAgent):
             output = run_cursor_prompt(full_prompt, remove=True)
             logger.info("Name generation output: %s", output.strip())
             data = json.loads(output)
-            return data.get("short_desc") or "auto-change"
+            return data.get("short_desc") or None
         except Exception as e:
-            logger.warning("Name generation failed, using fallback: %s", e)
-            return "auto-change"
+            logger.warning("Name generation failed, returning None: %s", e)
+            return None

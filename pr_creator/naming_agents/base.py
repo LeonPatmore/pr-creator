@@ -5,6 +5,6 @@ from abc import ABC, abstractmethod
 
 class NamingAgent(ABC):
     @abstractmethod
-    def generate_short_desc(self, prompt: str) -> str:
+    def generate_short_desc(self, prompt: str) -> str | None:
         """Generate a short description from the prompt."""
         raise NotImplementedError

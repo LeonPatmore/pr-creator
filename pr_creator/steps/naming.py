@@ -46,24 +46,30 @@ class GenerateNames(BaseNode):
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         change_id = ctx.state.change_id
         naming_agent = get_naming_agent()
-        short_desc = naming_agent.generate_short_desc(ctx.state.prompt)
+        short_desc = naming_agent.generate_short_desc(ctx.state.prompt) or "auto-change"
         slug_raw = _slugify(short_desc)
 
         # Keep branch slugs short and stable by default.
         slug = _limit_slug(slug_raw, max_words=5, max_len=40)
 
-        human_desc = slug.replace("-", " ").strip().capitalize()
+        # Human-readable short description for titles/messages
+        human_readable_desc = short_desc.replace("-", " ").strip().capitalize()
+        human_desc = (
+            _truncate_with_ellipsis(human_readable_desc, 80) or "Automated changes"
+        )
 
         # Branch name
         default_prefix = os.environ.get("DEFAULT_BRANCH_PREFIX", "auto/pr")
         if change_id:
-            # When change_id is provided, prefer the shortest stable branch name.
-            branch = change_id
+            branch = f"{change_id}/{slug}"
         else:
             branch = f"{default_prefix}/{slug}"
 
         # PR title and commit message
-        pr_title = _truncate_with_ellipsis(human_desc, 60) or "Automated changes"
+        if change_id:
+            pr_title = f"{change_id}: {human_desc}"
+        else:
+            pr_title = human_desc
         commit_message = pr_title
 
         ctx.state.branches[self.repo_url] = branch
