@@ -29,34 +29,22 @@ def ensure_dir(path: Path) -> None:
 
 
 def _get_branch_to_checkout(
-    repo_url: str, change_id: Optional[str], branch_prefix: str, token: Optional[str]
+    repo_url: str, token: Optional[str], branch_name: Optional[str]
 ) -> Optional[str]:
-    """Check if a branch exists remotely for the given change_id and return it."""
-    if not change_id or not token:
+    """Check if a branch exists remotely for the given branch name and return it."""
+    if not branch_name or not token:
         return None
-
     try:
         slug = github_slug_from_url(repo_url)
         if not slug:
             return None
-
         gh = Github(auth=Auth.Token(token))
         repo = gh.get_repo(slug)
-        branch_name = f"{branch_prefix}-{change_id}"
-
-        try:
-            repo.get_branch(branch_name)
-            logger.info(
-                "Found existing branch %s for change_id %s", branch_name, change_id
-            )
-            return branch_name
-        except Exception:
-            logger.info(
-                "Branch %s does not exist yet for change_id %s", branch_name, change_id
-            )
-            return None
-    except Exception as e:
-        logger.warning("Failed to check for existing branch: %s", e)
+        repo.get_branch(branch_name)
+        logger.info("Found existing branch %s", branch_name)
+        return branch_name
+    except Exception:
+        logger.info("Branch %s does not exist yet", branch_name)
         return None
 
 
@@ -91,18 +79,20 @@ def _get_default_branch(repo_url: str, token: Optional[str]) -> str:
 
 
 def clone_repo(
-    repo_url: str, working_dir: Path, change_id: Optional[str] = None
+    repo_url: str,
+    working_dir: Path,
+    change_id: Optional[str] = None,
+    branch_name: Optional[str] = None,
 ) -> CloneResult:
     """Clone a repository and checkout the appropriate branch."""
+    if not branch_name:
+        raise RuntimeError("Branch name must be provided by naming step before clone.")
     target = _get_target_path(repo_url, working_dir)
     clone_url = _get_clone_url(repo_url)
 
     # Check if branch exists remotely
-    branch_prefix = os.environ.get("SUBMIT_BRANCH_PREFIX", "auto/pr")
     token = os.environ.get("GITHUB_TOKEN")
-    branch_to_checkout = _get_branch_to_checkout(
-        repo_url, change_id, branch_prefix, token
-    )
+    branch_to_checkout = _get_branch_to_checkout(repo_url, token, branch_name)
 
     if branch_to_checkout:
         # Branch exists on remote - clone normally first, then checkout the branch
@@ -164,11 +154,7 @@ def clone_repo(
             if head_ref in repo.refs
             else f"refs/heads/{default_branch}".encode()
         )
-        new_branch = (
-            f"{branch_prefix}-{change_id}"
-            if change_id
-            else f"{branch_prefix}-{uuid.uuid4().hex[:8]}"
-        )
+        new_branch = branch_name
         logger.info("Creating feature branch %s from %s", new_branch, base_ref.decode())
         porcelain.branch_create(repo.path, new_branch.encode(), repo.refs[base_ref])
         branch_ref = f"refs/heads/{new_branch}".encode()
@@ -185,13 +171,12 @@ def clone_repo(
     return CloneResult(path=target, branch=new_branch)
 
 
-def _branch_exists_remotely(repo_url: str, change_id: Optional[str]) -> bool:
-    """Check if a branch exists remotely for the given change_id."""
-    branch_prefix = os.environ.get("SUBMIT_BRANCH_PREFIX", "auto/pr")
+def _branch_exists_remotely(
+    repo_url: str, change_id: Optional[str], branch_name: Optional[str]
+) -> bool:
+    """Check if a branch exists remotely for the given explicit name."""
     token = os.environ.get("GITHUB_TOKEN")
-    return (
-        _get_branch_to_checkout(repo_url, change_id, branch_prefix, token) is not None
-    )
+    return _get_branch_to_checkout(repo_url, token, branch_name) is not None
 
 
 @dataclass
@@ -200,11 +185,14 @@ class CloneRepo(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         """Clone repository and determine next step based on branch existence."""
-        result = clone_repo(self.repo_url, ctx.state.working_dir, ctx.state.change_id)
+        branch_name = ctx.state.branches.get(self.repo_url)
+        result = clone_repo(
+            self.repo_url, ctx.state.working_dir, ctx.state.change_id, branch_name
+        )
         ctx.state.cloned[self.repo_url] = result.path
         ctx.state.branches[self.repo_url] = result.branch
 
-        if _branch_exists_remotely(self.repo_url, ctx.state.change_id):
+        if _branch_exists_remotely(self.repo_url, ctx.state.change_id, branch_name):
             logger.info(
                 "Branch exists remotely for %s, skipping relevance check (will re-apply changes)",
                 self.repo_url,

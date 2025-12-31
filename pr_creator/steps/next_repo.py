@@ -8,6 +8,6 @@ class NextRepo(BaseNode):
         if not ctx.state.repos:
             return End(None)
         repo_url = ctx.state.repos.pop(0)
-        from .clone import CloneRepo
+        from .naming import GenerateNames
 
-        return CloneRepo(repo_url=repo_url)
+        return GenerateNames(repo_url=repo_url)

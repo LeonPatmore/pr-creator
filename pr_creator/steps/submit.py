@@ -23,6 +23,8 @@ class SubmitChanges(BaseNode):
             change_prompt=ctx.state.prompt,
             change_id=ctx.state.change_id,
             branch=ctx.state.branches.get(self.repo_url),
+            pr_title=ctx.state.pr_titles.get(self.repo_url),
+            commit_message=ctx.state.commit_messages.get(self.repo_url),
         )
         if result:
             ctx.state.created_prs.append(result)

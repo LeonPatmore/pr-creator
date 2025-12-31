@@ -8,6 +8,7 @@ from .steps import (
     CloneRepo,
     DiscoverRepos,
     EvaluateRelevance,
+    GenerateNames,
     NextRepo,
     SubmitChanges,
 )
@@ -20,6 +21,7 @@ def build_graph() -> Graph:
         nodes=[
             DiscoverRepos,
             NextRepo,
+            GenerateNames,
             CloneRepo,
             EvaluateRelevance,
             ApplyChanges,

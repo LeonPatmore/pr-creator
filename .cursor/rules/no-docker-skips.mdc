@@ -1,0 +1,5 @@
+---
+alwaysApply: false
+---
+
+Do NOT add Docker availability checks or skip guards to tests. Tests should assume Docker is available; avoid adding `_docker_available` helpers or pytest skip conditions related to Docker.

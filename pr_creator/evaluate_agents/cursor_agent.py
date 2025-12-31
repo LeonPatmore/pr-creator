@@ -3,23 +3,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import docker
-
 from .base import EvaluateAgent
-from pr_creator.cursor_config import (
-    get_cursor_image,
-    get_cursor_model,
-    get_cursor_env_vars,
-)
+from pr_creator.cursor_utils.runner import run_cursor_prompt
 
 logger = logging.getLogger(__name__)
 
 
 class CursorEvaluateAgent(EvaluateAgent):
     def evaluate(self, repo_path: Path, relevance_prompt: str) -> bool:
-        image = get_cursor_image()
-        model = get_cursor_model()
-        env_vars = get_cursor_env_vars()
         repo_abs = str(repo_path.resolve())
         prompt = (
             "You are evaluating whether a repository is relevant to an objective.\n"
@@ -29,29 +20,10 @@ class CursorEvaluateAgent(EvaluateAgent):
             "The final answer should be on its own line or clearly marked with double asterisks."
         )
 
-        client = docker.from_env()
-        output_bytes = client.containers.run(
-            image,
-            command=[
-                "cursor-agent",
-                "--workspace",
-                "/workspace",
-                "--model",
-                model,
-                "--print",
-                prompt,
-            ],
+        output = run_cursor_prompt(
+            prompt,
             volumes={repo_abs: {"bind": "/workspace", "mode": "rw"}},
-            working_dir="/workspace",
-            environment=env_vars,
             remove=False,
-        )
-
-        # containers.run returns bytes when detach=False
-        output = (
-            output_bytes.decode("utf-8")
-            if isinstance(output_bytes, bytes)
-            else str(output_bytes)
         )
 
         logger.info("Cursor evaluate output for %s: %s", repo_path, output.strip())
