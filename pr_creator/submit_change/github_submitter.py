@@ -9,6 +9,7 @@ from dulwich import porcelain
 from dulwich.config import StackedConfig
 from dulwich.repo import Repo
 from github import Auth, Github
+from github.GithubException import GithubException
 from github.Repository import Repository
 
 from .base import SubmitChange
@@ -138,6 +139,54 @@ def _get_remote_repo_and_base_branch(
     return remote_repo, base_branch or "main"
 
 
+def _find_existing_pr(
+    remote_repo: Repository, branch: str, base_branch: str, include_closed: bool = False
+):
+    """Return an existing PR for the given branch/base combination if present."""
+    head = f"{remote_repo.owner.login}:{branch}"
+    states = ["open", "closed"] if include_closed else ["open"]
+
+    for state in states:
+        try:
+            pulls = remote_repo.get_pulls(state=state, head=head, base=base_branch)
+            for pr in pulls:
+                return pr
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "[submit] failed to list %s PRs for head=%s base=%s: %s",
+                state,
+                head,
+                base_branch,
+                exc,
+            )
+            return None
+    return None
+
+
+def _return_existing_pr_if_any(
+    remote_repo: Repository,
+    origin: str,
+    branch: str,
+    base_branch: str,
+    include_closed: bool = False,
+) -> Optional[Dict[str, str]]:
+    existing_pr = _find_existing_pr(
+        remote_repo, branch, base_branch, include_closed=include_closed
+    )
+    if not existing_pr:
+        return None
+    logger.info(
+        "[submit] found existing PR for branch %s -> %s",
+        branch,
+        existing_pr.html_url,
+    )
+    return {
+        "repo_url": origin,
+        "branch": branch,
+        "pr_url": existing_pr.html_url,
+    }
+
+
 class GithubSubmitter(SubmitChange):
     def __init__(self) -> None:
         self.base_branch = os.environ.get("SUBMIT_PR_BASE") or None
@@ -222,12 +271,29 @@ class GithubSubmitter(SubmitChange):
             )
             return {"repo_url": origin, "branch": branch, "pr_url": None}
 
+        existing = _return_existing_pr_if_any(remote_repo, origin, branch, base_branch)
+        if existing:
+            return existing
+
         # Create new PR
         logger.info("[submit] creating PR head=%s base=%s", branch, base_branch)
-        pr = remote_repo.create_pull(
-            title=pr_title_final,
-            body=pr_body,
-            head=branch,
-            base=base_branch,
-        )
+        try:
+            pr = remote_repo.create_pull(
+                title=pr_title_final,
+                body=pr_body,
+                head=branch,
+                base=base_branch,
+            )
+        except GithubException as exc:
+            if exc.status == 422:
+                existing = _return_existing_pr_if_any(
+                    remote_repo,
+                    origin,
+                    branch,
+                    base_branch,
+                    include_closed=True,
+                )
+                if existing:
+                    return existing
+            raise
         return {"repo_url": origin, "branch": branch, "pr_url": pr.html_url}

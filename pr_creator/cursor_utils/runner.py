@@ -15,6 +15,7 @@ def run_cursor_prompt(
     volumes: dict | None = None,
     remove: bool = False,
     workdir: str = "/workspace",
+    stream_partial_output: bool = True,
 ) -> str:
     """
     Run cursor-agent with a prompt and return output as str.
@@ -24,17 +25,20 @@ def run_cursor_prompt(
     model = get_cursor_model()
     env_vars = get_cursor_env_vars()
     client = docker.from_env()
+    command = [
+        "cursor-agent",
+        "--workspace",
+        "/workspace",
+        "--model",
+        model,
+    ]
+    if stream_partial_output:
+        command.extend(["--output-format", "stream-json", "--stream-partial-output"])
+    command.extend(["--print", prompt])
+
     output_bytes = client.containers.run(
         image,
-        command=[
-            "cursor-agent",
-            "--workspace",
-            "/workspace",
-            "--model",
-            model,
-            "--print",
-            prompt,
-        ],
+        command=command,
         volumes=volumes or {},
         working_dir=workdir,
         environment=env_vars,

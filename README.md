@@ -2,6 +2,12 @@
 
 Simple workflow runner that clones target repos, applies changes via a change agent, and submits PRs.
 
+### Use cases
+- Roll out the same change across many repos (e.g., config, dependency, linting updates).
+- Apply automated PRs using AI agents with optional human-written prompts.
+- Re-run safely on the same repo/branch using `--change-id` to iterate on fixes.
+- Drive changes from a prompt config repo for repeatable, reviewed instructions.
+
 ### Required tools
 - Docker (for the cursor change agent)
 - No git or GitHub CLI needed (Dulwich + GitHub API handle clone/push/PR)
@@ -57,6 +63,12 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 **Runtime**
 - `--working-dir` — where repos are cloned; default `.repos`.
 - `--log-level` — logging level; default `INFO`.
+
+### Workspace management
+- Workspaces live under `--working-dir` (default `.repos`); directories are auto-created per repo.
+- When `--change-id` is set, the workspace path is deterministic (`<repo>-<change_id>`) and reused across runs so the same branch can be reapplied.
+- Without `--change-id`, a fresh workspace with a random suffix is created and cleaned up after each repo finishes.
+- To start fresh, remove the working directory (e.g., `rm -rf .repos`).
 
 ### Example (Docker)
 

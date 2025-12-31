@@ -15,6 +15,15 @@ class CleanupRepo(BaseNode):
     repo_url: str
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
+        # When change_id is provided, reuse the workspace across runs; skip cleanup.
+        if ctx.state.change_id:
+            logger.info(
+                "Skipping cleanup for %s because change_id=%s is set",
+                self.repo_url,
+                ctx.state.change_id,
+            )
+            return NextRepo()
+
         path = ctx.state.cloned.get(self.repo_url)
         if path:
             try:

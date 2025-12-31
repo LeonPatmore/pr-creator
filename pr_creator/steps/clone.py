@@ -53,16 +53,22 @@ def _find_branch_with_change_prefix(
             if not name.startswith(prefix):
                 continue
             if preferred and name == preferred:
-                logger.info("Found branch %s matching change id prefix %s", name, prefix)
+                logger.info(
+                    "Found branch %s matching change id prefix %s", name, prefix
+                )
                 return name
             if first_match is None:
                 first_match = name
 
         if first_match:
-            logger.info("Found branch %s matching change id prefix %s", first_match, prefix)
+            logger.info(
+                "Found branch %s matching change id prefix %s", first_match, prefix
+            )
         return first_match
     except Exception as exc:
-        logger.info("Could not search for branches with change id prefix %s: %s", change_id, exc)
+        logger.info(
+            "Could not search for branches with change id prefix %s: %s", change_id, exc
+        )
         return None
 
 
@@ -112,10 +118,23 @@ def _get_clone_url(repo_url: str) -> str:
     return repo_url
 
 
-def _get_target_path(repo_url: str, working_dir: Path) -> Path:
-    """Get target path for cloning, ensuring uniqueness."""
+def _sanitize_change_id(change_id: str) -> str:
+    """Make change_id safe for directory names."""
+    safe = "".join(c if c.isalnum() or c in ("-", "_") else "-" for c in change_id)
+    while "--" in safe:
+        safe = safe.replace("--", "-")
+    return safe.strip("-_") or "change"
+
+
+def _get_target_path(
+    repo_url: str, working_dir: Path, change_id: Optional[str]
+) -> Path:
+    """Get target path for cloning; deterministic when change_id is provided."""
     ensure_dir(working_dir)
     name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
+    if change_id:
+        safe_id = _sanitize_change_id(change_id)
+        return working_dir / f"{name}-{safe_id}"
     return working_dir / f"{name}-{uuid.uuid4().hex[:8]}"
 
 
@@ -141,7 +160,7 @@ def clone_repo(
     """Clone a repository and checkout the appropriate branch."""
     if not branch_name:
         raise RuntimeError("Branch name must be provided by naming step before clone.")
-    target = _get_target_path(repo_url, working_dir)
+    target = _get_target_path(repo_url, working_dir, change_id)
     clone_url = _get_clone_url(repo_url)
 
     # Check if branch exists remotely
@@ -150,29 +169,41 @@ def clone_repo(
         repo_url, token, branch_name, change_id
     )
 
-    if branch_to_checkout:
-        # Branch exists on remote - clone normally first, then checkout the branch
-        logger.info(
-            "Cloning %s -> %s (checking out branch %s)",
-            repo_url,
-            target,
-            branch_to_checkout,
-        )
-        # Clone with checkout=True to get a proper working directory with all files
+    repo_exists = target.exists() and (target / ".git").exists()
+
+    def _load_or_clone_repo() -> Repo:
+        """Load existing repo if available, otherwise clone a fresh copy."""
+        if repo_exists:
+            logger.info("Reusing existing workspace at %s", target)
+            try:
+                return Repo.discover(str(target))
+            except Exception as exc:
+                logger.warning(
+                    "Existing workspace at %s is invalid; recloning: %s", target, exc
+                )
+        logger.info("Cloning %s -> %s", repo_url, target)
         porcelain.clone(clone_url, target, checkout=True)
-        repo = Repo.discover(str(target))
+        return Repo.discover(str(target))
 
-        # Fetch the branch
-        porcelain.fetch(repo.path, clone_url)
+    repo = _load_or_clone_repo()
 
+    if branch_to_checkout:
+        # Ensure we have up-to-date refs before checking out.
+        try:
+            porcelain.fetch(repo.path, clone_url)
+        except Exception as exc:
+            logger.warning("Fetch failed for %s: %s", repo_url, exc)
+
+        branch_ref = f"refs/heads/{branch_to_checkout}".encode()
         # Create local branch tracking remote if it doesn't exist
         remote_ref = f"refs/remotes/origin/{branch_to_checkout}".encode()
-        if remote_ref in repo.refs:
-            branch_ref = f"refs/heads/{branch_to_checkout}".encode()
-            if branch_ref not in repo.refs:
-                porcelain.branch_create(
-                    repo.path, branch_to_checkout.encode(), repo.refs[remote_ref]
-                )
+        if branch_ref in repo.refs:
+            porcelain.checkout_branch(repo, branch_to_checkout, force=True)
+            logger.info("Checked out existing local branch %s", branch_to_checkout)
+        elif remote_ref in repo.refs:
+            porcelain.branch_create(
+                repo.path, branch_to_checkout.encode(), repo.refs[remote_ref]
+            )
 
             # Checkout the branch - this should write all files including .github
             porcelain.checkout_branch(repo, branch_to_checkout, force=True)
@@ -195,15 +226,27 @@ def clone_repo(
                 porcelain.reset(repo.path, "hard", b"HEAD")
                 porcelain.checkout_branch(repo, "HEAD", force=True)
     else:
-        # Branch does not exist - checkout main branch
+        # Branch does not exist - checkout main branch and create new feature branch
         default_branch = _get_default_branch(repo_url, token)
-        logger.info(
-            "Cloning %s -> %s (checking out %s)", repo_url, target, default_branch
-        )
-        porcelain.clone(clone_url, target, checkout=True)
+        if not repo_exists:
+            logger.info(
+                "Checking out %s for new branch %s in fresh clone",
+                default_branch,
+                branch_name,
+            )
+        else:
+            logger.info(
+                "Reusing existing workspace for new branch %s (default base %s)",
+                branch_name,
+                default_branch,
+            )
 
-        # Create and checkout a new feature branch so submitter only submits
-        repo = Repo.discover(str(target))
+        try:
+            porcelain.fetch(repo.path, clone_url)
+        except Exception:
+            # Non-fatal: proceed with existing refs
+            pass
+
         head_ref = repo.refs.read_ref(b"HEAD")
         base_ref = (
             head_ref
@@ -211,9 +254,14 @@ def clone_repo(
             else f"refs/heads/{default_branch}".encode()
         )
         new_branch = branch_name
-        logger.info("Creating feature branch %s from %s", new_branch, base_ref.decode())
-        porcelain.branch_create(repo.path, new_branch.encode(), repo.refs[base_ref])
         branch_ref = f"refs/heads/{new_branch}".encode()
+        if branch_ref not in repo.refs:
+            logger.info(
+                "Creating feature branch %s from %s", new_branch, base_ref.decode()
+            )
+            porcelain.branch_create(repo.path, new_branch.encode(), repo.refs[base_ref])
+        else:
+            logger.info("Reusing existing local branch %s", new_branch)
         repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
         porcelain.reset(repo.path, "hard", branch_ref)
         porcelain.checkout_branch(repo, new_branch, force=True)
