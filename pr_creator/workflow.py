@@ -5,12 +5,12 @@ from .state import WorkflowState
 from .steps import (
     ApplyChanges,
     CleanupRepo,
-    CloneRepo,
     DiscoverRepos,
     EvaluateRelevance,
     GenerateNames,
     NextRepo,
     SubmitChanges,
+    WorkspaceRepo,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def build_graph() -> Graph:
             DiscoverRepos,
             NextRepo,
             GenerateNames,
-            CloneRepo,
+            WorkspaceRepo,
             EvaluateRelevance,
             ApplyChanges,
             SubmitChanges,

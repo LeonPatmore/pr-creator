@@ -76,6 +76,6 @@ class GenerateNames(BaseNode):
         ctx.state.pr_titles[self.repo_url] = pr_title
         ctx.state.commit_messages[self.repo_url] = commit_message
 
-        from .clone import CloneRepo
+        from .workspace import WorkspaceRepo
 
-        return CloneRepo(repo_url=self.repo_url)
+        return WorkspaceRepo(repo_url=self.repo_url)

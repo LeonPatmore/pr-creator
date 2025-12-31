@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
 from pathlib import Path
@@ -109,8 +110,16 @@ def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
         raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
 
     refspec = f"refs/heads/{branch}:refs/heads/{branch}"
-    logger.info("[submit] pushing %s", refspec)
-    porcelain.push(repo.path, push_url, refspecs=[refspec])
+    # Avoid logging tokens; log a sanitized URL and silence push output streams.
+    logger.info("[submit] pushing %s to origin", refspec)
+    null_stream = io.BytesIO()
+    porcelain.push(
+        repo.path,
+        push_url,
+        refspecs=[refspec],
+        errstream=null_stream,
+        outstream=null_stream,
+    )
 
 
 def _build_pr_body(base_body: str, change_prompt: Optional[str]) -> str:
