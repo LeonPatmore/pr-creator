@@ -28,10 +28,64 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _get_branch_to_checkout(
-    repo_url: str, token: Optional[str], branch_name: Optional[str]
+def _find_branch_with_change_prefix(
+    repo_url: str,
+    token: Optional[str],
+    change_id: Optional[str],
+    preferred: Optional[str],
 ) -> Optional[str]:
-    """Check if a branch exists remotely for the given branch name and return it."""
+    """Return a remote branch that starts with the change_id prefix, if any."""
+    if not change_id or not token:
+        return None
+
+    try:
+        slug = github_slug_from_url(repo_url)
+        if not slug:
+            return None
+
+        gh = Github(auth=Auth.Token(token))
+        repo = gh.get_repo(slug)
+        prefix = f"{change_id}/"
+        first_match: Optional[str] = None
+
+        for branch in repo.get_branches():
+            name = branch.name
+            if not name.startswith(prefix):
+                continue
+            if preferred and name == preferred:
+                logger.info("Found branch %s matching change id prefix %s", name, prefix)
+                return name
+            if first_match is None:
+                first_match = name
+
+        if first_match:
+            logger.info("Found branch %s matching change id prefix %s", first_match, prefix)
+        return first_match
+    except Exception as exc:
+        logger.info("Could not search for branches with change id prefix %s: %s", change_id, exc)
+        return None
+
+
+def _get_branch_to_checkout(
+    repo_url: str,
+    token: Optional[str],
+    branch_name: Optional[str],
+    change_id: Optional[str],
+) -> Optional[str]:
+    """
+    Determine an existing remote branch to reuse.
+
+    Priority:
+    1) Any branch matching the change_id prefix (preferred if it matches branch_name).
+    2) Exact branch_name match.
+    """
+    # First, try to reuse any branch that shares the change_id prefix.
+    branch_from_prefix = _find_branch_with_change_prefix(
+        repo_url, token, change_id, branch_name
+    )
+    if branch_from_prefix:
+        return branch_from_prefix
+
     if not branch_name or not token:
         return None
     try:
@@ -92,7 +146,9 @@ def clone_repo(
 
     # Check if branch exists remotely
     token = os.environ.get("GITHUB_TOKEN")
-    branch_to_checkout = _get_branch_to_checkout(repo_url, token, branch_name)
+    branch_to_checkout = _get_branch_to_checkout(
+        repo_url, token, branch_name, change_id
+    )
 
     if branch_to_checkout:
         # Branch exists on remote - clone normally first, then checkout the branch
@@ -176,7 +232,7 @@ def _branch_exists_remotely(
 ) -> bool:
     """Check if a branch exists remotely for the given explicit name."""
     token = os.environ.get("GITHUB_TOKEN")
-    return _get_branch_to_checkout(repo_url, token, branch_name) is not None
+    return _get_branch_to_checkout(repo_url, token, branch_name, change_id) is not None
 
 
 @dataclass
