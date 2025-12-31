@@ -15,7 +15,7 @@ class CursorNamingAgent(NamingAgent):
             "You are generating a short description for a change prompt.\n"
             "- Produce a single JSON object ONLY, no extra text.\n"
             '- Shape: {"short_desc": "<kebab-case-phrase>"}\n'
-            "- short_desc: 6-10 words, lowercase, kebab-case, no punctuation beyond hyphens."
+            "- short_desc: 3-6 words, lowercase, kebab-case, no punctuation beyond hyphens."
         )
         full_prompt = f"{instruction}\n\nPrompt:\n{prompt}"
         try:

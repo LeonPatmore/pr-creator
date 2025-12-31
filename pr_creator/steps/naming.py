@@ -11,6 +11,27 @@ from pr_creator.naming_agents import get_naming_agent
 logger = logging.getLogger(__name__)
 
 
+def _truncate_with_ellipsis(text: str, max_len: int) -> str:
+    text = text.strip()
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return text[:max_len].rstrip()
+    return text[: max_len - 3].rstrip(" -:") + "..."
+
+
+def _limit_slug(slug: str, max_words: int, max_len: int) -> str:
+    parts = [p for p in slug.split("-") if p]
+    if max_words > 0:
+        parts = parts[:max_words]
+    limited = "-".join(parts) if parts else "auto-change"
+    if max_len > 0 and len(limited) > max_len:
+        limited = limited[:max_len].rstrip("-")
+    return limited or "auto-change"
+
+
 def _slugify(text: str) -> str:
     safe = "".join(c.lower() if c.isalnum() else "-" for c in text).strip("-")
     while "--" in safe:
@@ -26,18 +47,23 @@ class GenerateNames(BaseNode):
         change_id = ctx.state.change_id
         naming_agent = get_naming_agent()
         short_desc = naming_agent.generate_short_desc(ctx.state.prompt)
-        slug = _slugify(short_desc)
-        human_desc = short_desc.replace("-", " ").strip().capitalize()
+        slug_raw = _slugify(short_desc)
+
+        # Keep branch slugs short and stable by default.
+        slug = _limit_slug(slug_raw, max_words=5, max_len=40)
+
+        human_desc = slug.replace("-", " ").strip().capitalize()
 
         # Branch name
         default_prefix = os.environ.get("DEFAULT_BRANCH_PREFIX", "auto/pr")
         if change_id:
-            branch = f"{change_id}/{slug}"
+            # When change_id is provided, prefer the shortest stable branch name.
+            branch = change_id
         else:
             branch = f"{default_prefix}/{slug}"
 
         # PR title and commit message
-        pr_title = f"{change_id}: {human_desc}" if change_id else human_desc
+        pr_title = _truncate_with_ellipsis(human_desc, 60) or "Automated changes"
         commit_message = pr_title
 
         ctx.state.branches[self.repo_url] = branch

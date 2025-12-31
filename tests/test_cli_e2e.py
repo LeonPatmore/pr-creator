@@ -57,7 +57,9 @@ def _run_cli_and_assert_pr(
     pr = prs[0]
     branch_ref = pr.head.ref
     assert change_id in branch_ref, f"Expected change_id in branch name ({branch_ref})"
-    assert change_id in pr.title, f"Expected change_id in PR title ({pr.title})"
+    assert (
+        pr.title and len(pr.title) <= 60
+    ), f"Expected short PR title (got: {pr.title})"
 
     pr.edit(state="closed")
     try:
