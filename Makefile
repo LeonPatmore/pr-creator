@@ -25,6 +25,7 @@ format:
 
 .PHONY: build
 build:
+	rm -rf dist
 	pipenv run python -m build
 
 .PHONY: upload
