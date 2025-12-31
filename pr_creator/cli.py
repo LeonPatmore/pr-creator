@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from .jira_loader import load_prompt_from_jira
 from .logging_config import configure_logging
 from .prompt_config import load_prompts_from_config
 from .state import WorkflowState
@@ -53,6 +54,22 @@ def parse_args() -> argparse.Namespace:
         "--change-id",
         help="Change ID to use for static branch names (ensures re-runs use the same branch)",
     )
+    parser.add_argument(
+        "--jira-ticket",
+        help="Jira ticket id (e.g., ENG-123) to build the prompt from",
+    )
+    parser.add_argument(
+        "--jira-base-url",
+        help="Jira base URL, e.g., https://your-org.atlassian.net (env: JIRA_BASE_URL)",
+    )
+    parser.add_argument(
+        "--jira-email",
+        help="Jira user email for API token auth (env: JIRA_EMAIL)",
+    )
+    parser.add_argument(
+        "--jira-api-token",
+        help="Jira API token (env: JIRA_API_TOKEN)",
+    )
     return parser.parse_args()
 
 
@@ -61,8 +78,16 @@ def main() -> None:
     configure_logging(args.log_level, force=True)
     token = os.environ.get("GITHUB_TOKEN")
 
+    has_prompt_config = (
+        args.prompt_config_owner or args.prompt_config_repo or args.prompt_config_path
+    )
+    has_jira_prompt = bool(args.jira_ticket)
+
+    if has_prompt_config and has_jira_prompt:
+        raise SystemExit("Choose only one prompt source: prompt config or Jira ticket.")
+
     change_id = args.change_id
-    if args.prompt_config_owner or args.prompt_config_repo or args.prompt_config_path:
+    if has_prompt_config:
         if not (
             args.prompt_config_owner
             and args.prompt_config_repo
@@ -84,9 +109,19 @@ def main() -> None:
         # change_id from config takes precedence over CLI arg
         if "change_id" in prompts:
             change_id = prompts["change_id"]
+    elif has_jira_prompt:
+        jira_prompt = load_prompt_from_jira(
+            args.jira_base_url, args.jira_ticket, args.jira_email, args.jira_api_token
+        )
+        prompt = jira_prompt["prompt"]
+        relevance_prompt = args.relevance_prompt or ""
+        # Jira ticket id always defines the change id for stable naming
+        change_id = jira_prompt["change_id"]
     else:
         if not args.prompt:
-            raise SystemExit("--prompt is required when no prompt config is provided")
+            raise SystemExit(
+                "--prompt is required when no prompt config or Jira ticket is provided"
+            )
         prompt = args.prompt
         # Empty or missing relevance prompt => treat all repos as relevant
         relevance_prompt = args.relevance_prompt or ""

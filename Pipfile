@@ -8,10 +8,10 @@ pygithub = "*"
 pydantic-ai = "*"
 pydantic-graph = "*"
 dulwich = "*"
-requests = "*"
 pyyaml = "*"
 datadog-api-client = "*"
 docker = "*"
+jira = "*"
 
 [dev-packages]
 pytest = "*"
