@@ -31,6 +31,7 @@ def run_cursor_prompt(
         "/workspace",
         "--model",
         model,
+        "--force",
     ]
     if stream_partial_output:
         command.extend(["--output-format", "stream-json", "--stream-partial-output"])

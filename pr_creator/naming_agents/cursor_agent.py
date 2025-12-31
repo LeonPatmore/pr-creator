@@ -19,7 +19,12 @@ class CursorNamingAgent(NamingAgent):
         )
         full_prompt = f"{instruction}\n\nPrompt:\n{prompt}"
         try:
-            output = run_cursor_prompt(full_prompt, remove=True)
+            output = run_cursor_prompt(
+                full_prompt,
+                remove=True,
+                # For name generation we need the final JSON line, not streamed fragments.
+                stream_partial_output=False,
+            )
             logger.info("Name generation output: %s", output.strip())
             data = json.loads(output)
             return data.get("short_desc") or None

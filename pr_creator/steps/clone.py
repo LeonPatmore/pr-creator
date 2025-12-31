@@ -169,7 +169,14 @@ def clone_repo(
         repo_url, token, branch_name, change_id
     )
 
+    if not target.exists():
+        logger.info("No existing workspace at %s; will clone", target)
     repo_exists = target.exists() and (target / ".git").exists()
+    if target.exists() and not repo_exists:
+        logger.info(
+            "Not reusing existing path %s because .git is missing (likely not a repo)",
+            target,
+        )
 
     def _load_or_clone_repo() -> Repo:
         """Load existing repo if available, otherwise clone a fresh copy."""
@@ -180,6 +187,10 @@ def clone_repo(
             except Exception as exc:
                 logger.warning(
                     "Existing workspace at %s is invalid; recloning: %s", target, exc
+                )
+                # Provide extra context for reuse failure.
+                logger.info(
+                    "Recloning because workspace reuse failed (discover): %s", exc
                 )
         logger.info("Cloning %s -> %s", repo_url, target)
         porcelain.clone(clone_url, target, checkout=True)
