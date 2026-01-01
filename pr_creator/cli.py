@@ -9,6 +9,7 @@ from .logging_config import configure_logging
 from .prompt_config import load_prompts_from_config
 from .state import WorkflowState
 from .workflow import run_workflow
+from pr_creator.context_roots import normalize_context_roots
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +71,14 @@ def parse_args() -> argparse.Namespace:
         "--jira-api-token",
         help="Jira API token (env: JIRA_API_TOKEN)",
     )
+    parser.add_argument(
+        "--context-root",
+        action="append",
+        help=(
+            "Host directory to mount read-only into the agent workspace for extra context. "
+            "Can be passed multiple times. Env equivalent: AGENT_CONTEXT_ROOTS (comma-separated)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -77,6 +86,8 @@ def main() -> None:
     args = parse_args()
     configure_logging(args.log_level, force=True)
     token = os.environ.get("GITHUB_TOKEN")
+
+    context_roots = normalize_context_roots(list(args.context_root or []))
 
     has_prompt_config = (
         args.prompt_config_owner or args.prompt_config_repo or args.prompt_config_path
@@ -131,6 +142,7 @@ def main() -> None:
         relevance_prompt=relevance_prompt,
         repos=list(args.repo or []),
         working_dir=Path(args.working_dir),
+        context_roots=context_roots,
         datadog_team=args.datadog_team,
         datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
         change_id=change_id,

@@ -26,6 +26,7 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
+- `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
 - `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
 - `SUBMIT_CHANGE` — submitter; default `github`.
 - `SUBMIT_PR_BASE` — target base branch; default repo default.
@@ -73,6 +74,7 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 **Runtime**
 - `--working-dir` — where repos are cloned; default `.repos`.
 - `--log-level` — logging level; default `INFO`.
+- `--context-root` — host directory to mount (read-only) into the agent workspace for extra context; can be passed multiple times (env equivalent: `AGENT_CONTEXT_ROOTS`).
 
 ### Workspace management
 - Workspaces live under `--working-dir` (default `.repos`); directories are auto-created per repo.

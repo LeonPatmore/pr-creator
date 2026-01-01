@@ -6,6 +6,6 @@ from pathlib import Path
 
 class ChangeAgent(ABC):
     @abstractmethod
-    def run(self, repo_path: Path, prompt: str) -> None:
+    def run(self, repo_path: Path, prompt: str, *, context_roots: list[str]) -> None:
         """Apply changes to the given repo."""
         raise NotImplementedError

@@ -4,13 +4,23 @@ from pathlib import Path
 
 from .base import ChangeAgent
 from pr_creator.cursor_utils.runner import run_cursor_prompt
+from pr_creator.workspace_mounts import (
+    REPO_DIR,
+    build_workspace_volumes,
+    workspace_prompt_prefix,
+)
 
 
 class CursorChangeAgent(ChangeAgent):
-    def run(self, repo_path: Path, prompt: str) -> None:
+    def run(self, repo_path: Path, prompt: str, *, context_roots: list[str]) -> None:
         repo_abs = str(repo_path.resolve())
+        full_prompt = (
+            f"{workspace_prompt_prefix(include_repo_hint=True, context_roots=context_roots)}"
+            f"{prompt}"
+        )
         run_cursor_prompt(
-            prompt,
-            volumes={repo_abs: {"bind": "/workspace", "mode": "rw"}},
+            full_prompt,
+            volumes=build_workspace_volumes(repo_abs, context_roots=context_roots),
+            workdir=REPO_DIR,
             remove=False,
         )

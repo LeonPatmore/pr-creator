@@ -18,7 +18,7 @@ class ApplyChanges(BaseNode):
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
         agent = get_change_agent()
-        agent.run(path, ctx.state.prompt)
+        agent.run(path, ctx.state.prompt, context_roots=ctx.state.context_roots)
         ctx.state.processed.append(self.repo_url)
         from .submit import SubmitChanges
 

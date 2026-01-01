@@ -5,6 +5,11 @@ from pathlib import Path
 
 from .base import EvaluateAgent
 from pr_creator.cursor_utils.runner import run_cursor_prompt
+from pr_creator.workspace_mounts import (
+    REPO_DIR,
+    build_workspace_volumes,
+    workspace_prompt_prefix,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +26,9 @@ class CursorEvaluateAgent(EvaluateAgent):
         )
 
         output = run_cursor_prompt(
-            prompt,
-            volumes={repo_abs: {"bind": "/workspace", "mode": "rw"}},
+            f"{workspace_prompt_prefix(include_repo_hint=True, context_roots=[])}{prompt}",
+            volumes=build_workspace_volumes(repo_abs, context_roots=[]),
+            workdir=REPO_DIR,
             remove=False,
         )
 
