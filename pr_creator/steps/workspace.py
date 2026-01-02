@@ -4,8 +4,9 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+import io
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 from dulwich import porcelain
 from dulwich.repo import Repo
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class CloneResult:
     path: Path
     branch: str
+    branch_exists_remotely: bool
 
 
 def ensure_dir(path: Path) -> None:
@@ -155,11 +157,62 @@ def load_or_clone_repo(target: Path, repo_url: str, clone_url: str) -> Repo:
     return Repo.discover(str(target))
 
 
-def fetch_refs(repo: Repo, clone_url: str, repo_url: str) -> None:
+def _is_ancestor(repo: Repo, possible_ancestor: bytes, commit_sha: bytes) -> bool:
+    """Return True if possible_ancestor is reachable from commit_sha (inclusive)."""
+    if possible_ancestor == commit_sha:
+        return True
+    stack = [commit_sha]
+    seen: set[bytes] = set()
+    while stack:
+        sha = stack.pop()
+        if sha in seen:
+            continue
+        seen.add(sha)
+        try:
+            obj = repo[sha]
+        except Exception:
+            continue
+        parents = getattr(obj, "parents", None)
+        if not parents:
+            continue
+        for p in parents:
+            if p == possible_ancestor:
+                return True
+            stack.append(p)
+    return False
+
+
+def fetch_refs(repo: Repo, clone_url: str, repo_url: str) -> Dict[bytes, bytes]:
     try:
-        porcelain.fetch(repo.path, clone_url)
+        # Silence noisy fetch output, but keep warnings/errors in logs.
+        out = io.StringIO()
+        err = io.BytesIO()
+        remote_refs: Dict[bytes, bytes] = porcelain.fetch(
+            repo.path, clone_url, outstream=out, errstream=err
+        )
+
+        # dulwich returns refs, but it doesn't always populate remote-tracking refs under
+        # refs/remotes/origin/*. Write them so downstream logic can reliably find them.
+        written = 0
+        for ref_name, sha in remote_refs.items():
+            if not ref_name.startswith(b"refs/heads/"):
+                continue
+            branch_name = ref_name[len(b"refs/heads/") :]
+            tracking = b"refs/remotes/origin/" + branch_name
+            try:
+                repo.refs[tracking] = sha
+                written += 1
+            except Exception:
+                # Best-effort: lack of tracking refs should not break workspaces.
+                pass
+        if written:
+            logger.info(
+                "Fetch updated %d origin/* tracking refs for %s", written, repo_url
+            )
+        return remote_refs
     except Exception as exc:
         logger.warning("Fetch failed for %s: %s", repo_url, exc)
+        return {}
 
 
 def ensure_branch_from_remote(
@@ -167,10 +220,67 @@ def ensure_branch_from_remote(
 ) -> None:
     branch_ref = f"refs/heads/{branch}".encode()
     remote_ref = f"refs/remotes/origin/{branch}".encode()
-    if remote_ref not in repo.refs:
+    local_exists = branch_ref in repo.refs
+    remote_exists = remote_ref in repo.refs
+
+    local_sha = repo.refs[branch_ref] if local_exists else None
+    remote_sha = repo.refs[remote_ref] if remote_exists else None
+
+    logger.info(
+        "Workspace branch refs for %s: local=%s%s remote(origin)=%s%s",
+        branch,
+        branch_ref.decode(),
+        f"@{local_sha.hex()[:8]}" if local_sha else "",
+        remote_ref.decode(),
+        f"@{remote_sha.hex()[:8]}" if remote_sha else "",
+    )
+
+    # Prefer keeping an existing local branch (don't throw away history on reruns).
+    if local_exists:
+        repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
+        porcelain.checkout_branch(repo, branch, force=True)
+
+        if remote_exists:
+            if local_sha == remote_sha:
+                logger.info("Local branch %s already up to date with origin", branch)
+            else:
+                # Only move local state when it is a safe fast-forward; otherwise keep local.
+                if (
+                    local_sha
+                    and remote_sha
+                    and _is_ancestor(repo, local_sha, remote_sha)
+                ):
+                    porcelain.reset(repo.path, "hard", remote_sha)
+                    repo.refs[branch_ref] = remote_sha
+                    logger.info("Fast-forwarded local branch %s to origin", branch)
+                elif (
+                    local_sha
+                    and remote_sha
+                    and _is_ancestor(repo, remote_sha, local_sha)
+                ):
+                    logger.info(
+                        "Local branch %s is ahead of remote; keeping local history",
+                        branch,
+                    )
+                else:
+                    logger.warning(
+                        "Local branch %s has diverged from remote; keeping local history",
+                        branch,
+                    )
+        else:
+            logger.warning(
+                "Remote tracking ref for branch %s not found; keeping existing local branch",
+                branch,
+            )
+        logger.info("Checked out branch %s", branch)
+        return
+
+    if not remote_exists:
         default_branch = _get_default_branch(repo_url, token)
         logger.warning(
-            "Remote branch %s not found, falling back to %s", branch, default_branch
+            "Remote branch %s not found and no local branch exists; falling back to %s",
+            branch,
+            default_branch,
         )
         base_ref = f"refs/heads/{default_branch}".encode()
         if base_ref in repo.refs:
@@ -182,12 +292,9 @@ def ensure_branch_from_remote(
             porcelain.checkout_branch(repo, "HEAD", force=True)
         return
 
-    if branch_ref in repo.refs:
-        porcelain.reset(repo.path, "hard", repo.refs[remote_ref])
-        logger.info("Updated local branch %s to remote before checkout", branch)
-    else:
-        porcelain.branch_create(repo.path, branch.encode(), repo.refs[remote_ref])
-        logger.info("Created local branch %s from remote", branch)
+    # No local branch: create it from the remote-tracking ref.
+    porcelain.branch_create(repo.path, branch.encode(), repo.refs[remote_ref])
+    logger.info("Created local branch %s from remote", branch)
     porcelain.checkout_branch(repo, branch, force=True)
     logger.info("Checked out branch %s", branch)
 
@@ -207,7 +314,7 @@ def create_branch_from_default(
     else:
         logger.info("Reusing existing local branch %s", new_branch)
     repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
-    porcelain.reset(repo.path, "hard", branch_ref)
+    porcelain.reset(repo.path, "hard", repo.refs[branch_ref])
     porcelain.checkout_branch(repo, new_branch, force=True)
     repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
 
@@ -226,23 +333,21 @@ def prepare_workspace(
     branch_to_checkout = _get_branch_to_checkout(
         repo_url, token, branch_name, change_id
     )
+    branch_exists_remotely = branch_to_checkout is not None
 
     repo = load_or_clone_repo(target, repo_url, clone_url)
     fetch_refs(repo, clone_url, repo_url)
 
     if branch_to_checkout:
         ensure_branch_from_remote(repo, branch_to_checkout, repo_url, token)
-        return CloneResult(path=target, branch=branch_to_checkout)
+        return CloneResult(
+            path=target, branch=branch_to_checkout, branch_exists_remotely=True
+        )
 
     create_branch_from_default(repo, branch_name, repo_url, token)
-    return CloneResult(path=target, branch=branch_name)
-
-
-def _branch_exists_remotely(
-    repo_url: str, change_id: Optional[str], branch_name: Optional[str]
-) -> bool:
-    token = os.environ.get("GITHUB_TOKEN")
-    return _get_branch_to_checkout(repo_url, token, branch_name, change_id) is not None
+    return CloneResult(
+        path=target, branch=branch_name, branch_exists_remotely=branch_exists_remotely
+    )
 
 
 @dataclass
@@ -257,7 +362,7 @@ class WorkspaceRepo(BaseNode):
         ctx.state.cloned[self.repo_url] = result.path
         ctx.state.branches[self.repo_url] = result.branch
 
-        if _branch_exists_remotely(self.repo_url, ctx.state.change_id, branch_name):
+        if result.branch_exists_remotely:
             logger.info(
                 "Branch exists remotely for %s, skipping relevance check (will re-apply changes)",
                 self.repo_url,
