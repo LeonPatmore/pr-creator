@@ -98,6 +98,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _merge_base_prompt_with_cli_prompt(base_prompt: str, cli_prompt: str | None) -> str:
+    """
+    If a prompt source (prompt config or Jira) is used AND --prompt is also provided,
+    append the CLI prompt to the end of the loaded prompt.
+    """
+    if not cli_prompt or not cli_prompt.strip():
+        return base_prompt
+    return f"{base_prompt.rstrip()}\n\n{cli_prompt.strip()}"
+
+
 def main() -> None:
     args = parse_args()
     configure_logging(args.log_level, force=True)
@@ -131,7 +141,7 @@ def main() -> None:
             args.prompt_config_path,
             token,
         )
-        prompt = prompts["prompt"]
+        prompt = _merge_base_prompt_with_cli_prompt(prompts["prompt"], args.prompt)
         relevance_prompt = prompts.get("relevance_prompt") or ""
         # change_id from config takes precedence over CLI arg
         if "change_id" in prompts:
@@ -140,7 +150,7 @@ def main() -> None:
         jira_prompt = load_prompt_from_jira(
             args.jira_base_url, args.jira_ticket, args.jira_email, args.jira_api_token
         )
-        prompt = jira_prompt["prompt"]
+        prompt = _merge_base_prompt_with_cli_prompt(jira_prompt["prompt"], args.prompt)
         relevance_prompt = args.relevance_prompt or ""
         # Jira ticket id always defines the change id for stable naming
         change_id = jira_prompt["change_id"]
