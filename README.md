@@ -24,6 +24,18 @@ pipx install multi-repo-pr-creator
 pr-creator --help
 ```
 
+Quick start (CLI prompts):
+
+```sh
+export CURSOR_API_KEY=...
+export GITHUB_TOKEN=...
+
+pr-creator \
+  --prompt "Update dependency X to version Y." \
+  --repo https://github.com/<owner>/<repo> \
+  --working-dir .repos
+```
+
 Or run via Docker (see example below).
 
 ### Docker images
