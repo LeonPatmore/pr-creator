@@ -79,6 +79,22 @@ def parse_args() -> argparse.Namespace:
             "Can be passed multiple times. Env equivalent: AGENT_CONTEXT_ROOTS (comma-separated)."
         ),
     )
+    parser.add_argument(
+        "--secret",
+        action="append",
+        help=(
+            "Secret to pass to the change agent as an environment variable (KEY=VALUE). "
+            "Can be passed multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--secret-env",
+        action="append",
+        help=(
+            "Name of an environment variable to forward to the change agent. "
+            "Value is read from the current process environment. Can be passed multiple times."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -143,11 +159,16 @@ def main() -> None:
         repos=list(args.repo or []),
         working_dir=Path(args.working_dir),
         context_roots=context_roots,
+        change_agent_secret_kv_pairs=list(args.secret or []),
+        change_agent_secret_env_keys=list(args.secret_env or []),
         datadog_team=args.datadog_team,
         datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
         change_id=change_id,
     )
-    final_state = asyncio.run(run_workflow(state))
+    try:
+        final_state = asyncio.run(run_workflow(state))
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
     summary = {
         "irrelevant_repos": final_state.irrelevant,
         "created_prs": final_state.created_prs,

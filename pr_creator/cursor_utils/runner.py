@@ -16,6 +16,7 @@ def run_cursor_prompt(
     remove: bool = False,
     workdir: str = "/workspace",
     stream_partial_output: bool = True,
+    extra_env: dict[str, str] | None = None,
 ) -> str:
     """
     Run cursor-agent with a prompt and return output as str.
@@ -24,6 +25,8 @@ def run_cursor_prompt(
     image = get_cursor_image()
     model = get_cursor_model()
     env_vars = get_cursor_env_vars()
+    if extra_env:
+        env_vars = {**env_vars, **extra_env}
     client = docker.from_env()
     command = [
         "cursor-agent",

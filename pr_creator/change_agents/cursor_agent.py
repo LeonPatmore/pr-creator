@@ -12,7 +12,14 @@ from pr_creator.workspace_mounts import (
 
 
 class CursorChangeAgent(ChangeAgent):
-    def run(self, repo_path: Path, prompt: str, *, context_roots: list[str]) -> None:
+    def run(
+        self,
+        repo_path: Path,
+        prompt: str,
+        *,
+        context_roots: list[str],
+        secrets: dict[str, str] | None = None,
+    ) -> None:
         repo_abs = str(repo_path.resolve())
         full_prompt = (
             f"{workspace_prompt_prefix(include_repo_hint=True, context_roots=context_roots)}"
@@ -23,4 +30,5 @@ class CursorChangeAgent(ChangeAgent):
             volumes=build_workspace_volumes(repo_abs, context_roots=context_roots),
             workdir=REPO_DIR,
             remove=False,
+            extra_env=secrets or {},
         )

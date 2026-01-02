@@ -75,6 +75,8 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `--working-dir` — where repos are cloned; default `.repos`.
 - `--log-level` — logging level; default `INFO`.
 - `--context-root` — host directory to mount (read-only) into the agent workspace for extra context; can be passed multiple times (env equivalent: `AGENT_CONTEXT_ROOTS`).
+- `--secret` — forward a secret to the change agent as an env var (`KEY=VALUE`); can be passed multiple times.
+- `--secret-env` — forward an env var (by name) from the current process into the change agent; can be passed multiple times.
 
 ### Workspace management
 - Workspaces live under `--working-dir` (default `.repos`); directories are auto-created per repo.

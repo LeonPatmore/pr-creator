@@ -50,7 +50,9 @@ def workspace_prompt_prefix(
         lines.append(
             "Additional read-only context is available at:\n"
             f"- {CONTEXT_DIR}/0 (and higher indexes)\n"
-            "Use this for reference only; do not modify it. If your prompt contains any links to external code, always check this context for the most up-to-date code."
+            "Use this for reference only; do not modify it. "
+            "If your prompt contains any links to external code, always check this context "
+            "for the most up-to-date code."
         )
 
     return ("\n\n".join(lines) + "\n\n") if lines else ""

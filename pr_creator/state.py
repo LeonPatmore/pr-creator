@@ -10,6 +10,13 @@ class WorkflowState:
     repos: List[str]
     working_dir: Path
     context_roots: List[str] = field(default_factory=list)
+    # Extra env vars (often secrets) forwarded to the change agent process/container.
+    # Values should never be logged.
+    change_agent_secrets: Dict[str, str] = field(default_factory=dict)
+    # Raw secret inputs (e.g. from CLI) that are resolved into `change_agent_secrets`
+    # during workflow setup.
+    change_agent_secret_kv_pairs: List[str] = field(default_factory=list)
+    change_agent_secret_env_keys: List[str] = field(default_factory=list)
     cloned: Dict[str, Path] = field(default_factory=dict)
     branches: Dict[str, str] = field(default_factory=dict)
     pr_titles: Dict[str, str] = field(default_factory=dict)
