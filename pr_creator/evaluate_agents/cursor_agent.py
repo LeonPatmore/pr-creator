@@ -4,17 +4,15 @@ import logging
 from pathlib import Path
 
 from .base import EvaluateAgent
-from pr_creator.cursor_utils.runner import run_cursor_prompt
-from pr_creator.workspace_mounts import (
-    REPO_DIR,
-    build_workspace_volumes,
-    workspace_prompt_prefix,
-)
+from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 
 logger = logging.getLogger(__name__)
 
 
 class CursorEvaluateAgent(EvaluateAgent):
+    def __init__(self, runner: CursorRunner | None = None) -> None:
+        self._runner = runner or get_cursor_runner()
+
     def evaluate(self, repo_path: Path, relevance_prompt: str) -> bool:
         repo_abs = str(repo_path.resolve())
         prompt = (
@@ -25,11 +23,13 @@ class CursorEvaluateAgent(EvaluateAgent):
             "The final answer should be on its own line or clearly marked with double asterisks."
         )
 
-        output = run_cursor_prompt(
-            f"{workspace_prompt_prefix(include_repo_hint=True, context_roots=[])}{prompt}",
-            volumes=build_workspace_volumes(repo_abs, context_roots=[]),
-            workdir=REPO_DIR,
+        output = self._runner.run_prompt(
+            prompt,
+            repo_abs=repo_abs,
+            context_roots=[],
+            include_repo_hint=True,
             remove=False,
+            stream_partial_output=True,
         )
 
         logger.info("Cursor evaluate output for %s: %s", repo_path, output.strip())

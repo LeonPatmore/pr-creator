@@ -9,7 +9,9 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - Drive changes from a prompt config repo for repeatable, reviewed instructions.
 
 ### Required tools
-- Docker (for the cursor change agent)
+- Either:
+  - Docker (to run `cursor-agent` in a container), or
+  - A local `cursor-agent` binary on your PATH (to run Cursor via CLI)
 - No git or GitHub CLI needed (Dulwich + GitHub API handle clone/push/PR)
 
 ### Environment variables
@@ -26,6 +28,9 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 - `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
+- `CURSOR_RUNNER` — how to run cursor-agent; `docker` or `cli` (default: `docker`).
+- `CURSOR_CLI_BIN` — cursor-agent binary name/path when using `CURSOR_RUNNER=cli` (default: `cursor-agent`).
+- `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent when using `CURSOR_RUNNER=cli` (default: common path of repo + context roots).
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
 - `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
 - `SUBMIT_CHANGE` — submitter; default `github`.

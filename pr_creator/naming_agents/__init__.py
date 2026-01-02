@@ -4,6 +4,7 @@ import os
 
 from .base import NamingAgent
 from .cursor_agent import CursorNamingAgent
+from pr_creator.cursor_utils.runners import get_cursor_runner
 
 DEFAULT_AGENT = "cursor"
 
@@ -11,7 +12,7 @@ DEFAULT_AGENT = "cursor"
 def get_naming_agent(name: str | None = None) -> NamingAgent:
     agent_name = (name or os.environ.get("NAMING_AGENT") or DEFAULT_AGENT).lower()
     if agent_name == "cursor":
-        return CursorNamingAgent()
+        return CursorNamingAgent(get_cursor_runner())
     raise ValueError(f"Unknown naming agent: {agent_name}")
 
 

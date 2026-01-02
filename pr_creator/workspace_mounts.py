@@ -1,55 +1,32 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
 WORKSPACE_ROOT = "/workspace"
 REPO_DIR = f"{WORKSPACE_ROOT}/repo"
 CONTEXT_DIR = f"{WORKSPACE_ROOT}/context"
 
 
-def build_workspace_volumes(
-    repo_abs: str | None, *, context_roots: list[str]
-) -> dict[str, dict[str, Any]]:
-    """
-    Build docker-py `volumes` mapping for an agent container.
-
-    We mount the *target repo* at /workspace/repo (rw) and any extra context roots
-    at /workspace/context/<n> (ro). This avoids staging untracked context files
-    into the target repo during submit.
-    """
-    volumes: dict[str, dict[str, Any]] = {}
-
-    if repo_abs:
-        volumes[repo_abs] = {"bind": REPO_DIR, "mode": "rw"}
-
-    for idx, root in enumerate(context_roots):
-        try:
-            root_abs = str(Path(root).expanduser().resolve())
-        except Exception:
-            root_abs = root
-        volumes[root_abs] = {"bind": f"{CONTEXT_DIR}/{idx}", "mode": "ro"}
-
-    return volumes
-
-
 def workspace_prompt_prefix(
-    *, include_repo_hint: bool, context_roots: list[str]
+    *, include_repo_hint: bool, repo_dir: str | None, context_dirs: list[str]
 ) -> str:
     """
     Prefix instructions to help an agent locate the repo + optional context.
     """
     lines: list[str] = []
     if include_repo_hint:
+        if not repo_dir:
+            raise ValueError("repo_dir must be provided when include_repo_hint=True")
         lines.append(
-            f"Target repository to edit is located at: {REPO_DIR}\n"
-            f"Treat {REPO_DIR} as the repo root."
+            f"Target repository to edit is located at: {repo_dir}\n"
+            f"Treat {repo_dir} as the repo root."
         )
 
-    if context_roots:
+    if context_dirs:
+        first = context_dirs[0]
+        rest_count = max(0, len(context_dirs) - 1)
+        more = f" (and {rest_count} more)" if rest_count else ""
         lines.append(
             "Additional read-only context is available at:\n"
-            f"- {CONTEXT_DIR}/0 (and higher indexes)\n"
+            f"- {first}{more}\n"
             "Use this for reference only; do not modify it. "
             "If your prompt contains any links to external code, always check this context "
             "for the most up-to-date code."

@@ -4,6 +4,7 @@ import os
 
 from .base import EvaluateAgent
 from .cursor_agent import CursorEvaluateAgent
+from pr_creator.cursor_utils.runners import get_cursor_runner
 
 DEFAULT_AGENT = "cursor"
 
@@ -11,7 +12,7 @@ DEFAULT_AGENT = "cursor"
 def get_evaluate_agent(name: str | None = None) -> EvaluateAgent:
     agent_name = (name or os.environ.get("EVALUATE_AGENT") or DEFAULT_AGENT).lower()
     if agent_name == "cursor":
-        return CursorEvaluateAgent()
+        return CursorEvaluateAgent(get_cursor_runner())
     raise ValueError(f"Unknown evaluate agent: {agent_name}")
 
 
