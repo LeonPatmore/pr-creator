@@ -63,6 +63,16 @@ You choose exactly **one base prompt source**:
 - **Mutual exclusion**: you can’t use Jira (`--jira-ticket`) and prompt config (`--prompt-config-*`) together.
 - **Prompt “tail”**: if you use prompt config or Jira and also pass `--prompt`, the CLI prompt is appended to the loaded prompt.
 
+### Multi-repo changes
+Target repos in one (or both) of these ways:
+- **Explicit list**: pass `--repo` multiple times. Each value can be a full URL, an `owner/repo` slug, or (with `GITHUB_DEFAULT_ORG`) a bare repo name.
+- **Datadog discovery**: pass `--datadog-team` to discover repos and add them to the list (requires `DATADOG_API_KEY` + `DATADOG_APP_KEY`).
+
+Repo processing behavior:
+- **Dedup + normalization**: repo inputs are normalized to GitHub HTTPS URLs and deduplicated.
+- **Optional relevance filter**: if a `relevance_prompt` is present, each repo is evaluated and only relevant repos get changes applied.
+- **Repeatable reruns**: set `--change-id` to use stable branch naming (`<change_id>/<slug>`) and a stable workspace path under `--working-dir` (useful for rerunning after fixes).
+
 ### Environment variables
 **GitHub auth (required for PR creation)**
 - `GITHUB_TOKEN` — used for push and GitHub PR creation.
