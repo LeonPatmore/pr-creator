@@ -9,6 +9,19 @@ class WorkflowState:
     relevance_prompt: str
     repos: List[str]
     working_dir: Path
+    # Optional CLI prompt which, when used with Jira/prompt-config, is treated as
+    # highest-priority instructions.
+    cli_prompt: Optional[str] = None
+    # Prompt-config source inputs (loaded during InitWorkflow).
+    prompt_config_owner: Optional[str] = None
+    prompt_config_repo: Optional[str] = None
+    prompt_config_ref: Optional[str] = None
+    prompt_config_path: Optional[str] = None
+    # Jira prompt source inputs (loaded during InitWorkflow).
+    jira_ticket: Optional[str] = None
+    jira_base_url: Optional[str] = None
+    jira_email: Optional[str] = None
+    jira_api_token: Optional[str] = None
     context_roots: List[str] = field(default_factory=list)
     # Extra env vars (often secrets) forwarded to the change agent process/container.
     # Values should never be logged.
@@ -28,3 +41,9 @@ class WorkflowState:
     datadog_team: Optional[str] = None
     datadog_site: str = "datadoghq.com"
     change_id: Optional[str] = None
+    # Raw review output from the review step, keyed by repo_url.
+    review_feedback: Dict[str, str] = field(default_factory=dict)
+    # Review feedback that should be applied on the next ApplyChanges pass.
+    review_pending: Dict[str, str] = field(default_factory=dict)
+    # Number of review->apply retries attempted per repo_url.
+    review_attempts: Dict[str, int] = field(default_factory=dict)

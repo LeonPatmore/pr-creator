@@ -10,6 +10,8 @@ from pr_creator.naming_agents import get_naming_agent
 
 logger = logging.getLogger(__name__)
 
+_agent = get_naming_agent()
+
 
 def _truncate_with_ellipsis(text: str, max_len: int) -> str:
     text = text.strip()
@@ -45,8 +47,7 @@ class GenerateNames(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         change_id = ctx.state.change_id
-        naming_agent = get_naming_agent()
-        short_desc = naming_agent.generate_short_desc(ctx.state.prompt) or "auto-change"
+        short_desc = _agent.generate_short_desc(ctx.state.prompt) or "auto-change"
         slug_raw = _slugify(short_desc)
 
         # Keep branch slugs short and stable by default.

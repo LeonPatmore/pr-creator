@@ -9,6 +9,8 @@ from pydantic_graph import BaseNode, End, GraphRunContext
 
 logger = logging.getLogger(__name__)
 
+_agent = get_change_agent()
+
 
 @dataclass
 class ApplyChanges(BaseNode):
@@ -17,14 +19,26 @@ class ApplyChanges(BaseNode):
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
-        agent = get_change_agent()
-        agent.run(
+
+        pending = ctx.state.review_pending.pop(self.repo_url, "").strip()
+        if pending:
+            prompt = (
+                "## CRITICAL: Address review feedback first\n"
+                "Apply the following review feedback before doing anything else.\n"
+                "If there is a conflict, prioritize this section.\n\n"
+                f"{pending}\n\n"
+                "## Original request (retain intent)\n"
+                f"{ctx.state.prompt.strip()}\n"
+            )
+        else:
+            prompt = ctx.state.prompt
+        _agent.run(
             path,
-            ctx.state.prompt,
+            prompt,
             context_roots=ctx.state.context_roots,
             secrets=ctx.state.change_agent_secrets,
         )
         ctx.state.processed.append(self.repo_url)
-        from .submit import SubmitChanges
+        from .review import ReviewChanges
 
-        return SubmitChanges(repo_url=self.repo_url)
+        return ReviewChanges(repo_url=self.repo_url)

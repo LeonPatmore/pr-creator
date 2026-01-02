@@ -1,12 +1,9 @@
 import argparse
 import asyncio
 import json
-import os
 from pathlib import Path
 
-from .jira_loader import load_prompt_from_jira
 from .logging_config import configure_logging
-from .prompt_config import load_prompts_from_config
 from .state import WorkflowState
 from .workflow import run_workflow
 from pr_creator.context_roots import normalize_context_roots
@@ -98,74 +95,24 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _merge_base_prompt_with_cli_prompt(base_prompt: str, cli_prompt: str | None) -> str:
-    """
-    If a prompt source (prompt config or Jira) is used AND --prompt is also provided,
-    append the CLI prompt to the end of the loaded prompt.
-    """
-    if not cli_prompt or not cli_prompt.strip():
-        return base_prompt
-    return f"{base_prompt.rstrip()}\n\n{cli_prompt.strip()}"
-
-
 def main() -> None:
     args = parse_args()
     configure_logging(args.log_level, force=True)
-    token = os.environ.get("GITHUB_TOKEN")
 
     context_roots = normalize_context_roots(list(args.context_root or []))
 
-    has_prompt_config = (
-        args.prompt_config_owner or args.prompt_config_repo or args.prompt_config_path
-    )
-    has_jira_prompt = bool(args.jira_ticket)
-
-    if has_prompt_config and has_jira_prompt:
-        raise SystemExit("Choose only one prompt source: prompt config or Jira ticket.")
-
-    change_id = args.change_id
-    if has_prompt_config:
-        if not (
-            args.prompt_config_owner
-            and args.prompt_config_repo
-            and args.prompt_config_path
-        ):
-            raise SystemExit(
-                "When using prompt config, provide --prompt-config-owner, "
-                "--prompt-config-repo, and --prompt-config-path"
-            )
-        prompts = load_prompts_from_config(
-            args.prompt_config_owner,
-            args.prompt_config_repo,
-            args.prompt_config_ref,
-            args.prompt_config_path,
-            token,
-        )
-        prompt = _merge_base_prompt_with_cli_prompt(prompts["prompt"], args.prompt)
-        relevance_prompt = prompts.get("relevance_prompt") or ""
-        # change_id from config takes precedence over CLI arg
-        if "change_id" in prompts:
-            change_id = prompts["change_id"]
-    elif has_jira_prompt:
-        jira_prompt = load_prompt_from_jira(
-            args.jira_base_url, args.jira_ticket, args.jira_email, args.jira_api_token
-        )
-        prompt = _merge_base_prompt_with_cli_prompt(jira_prompt["prompt"], args.prompt)
-        relevance_prompt = args.relevance_prompt or ""
-        # Jira ticket id always defines the change id for stable naming
-        change_id = jira_prompt["change_id"]
-    else:
-        if not args.prompt:
-            raise SystemExit(
-                "--prompt is required when no prompt config or Jira ticket is provided"
-            )
-        prompt = args.prompt
-        # Empty or missing relevance prompt => treat all repos as relevant
-        relevance_prompt = args.relevance_prompt or ""
-
     state = WorkflowState(
-        prompt=prompt,
-        relevance_prompt=relevance_prompt,
+        prompt="",
+        relevance_prompt=args.relevance_prompt or "",
+        cli_prompt=args.prompt,
+        prompt_config_owner=args.prompt_config_owner,
+        prompt_config_repo=args.prompt_config_repo,
+        prompt_config_ref=args.prompt_config_ref,
+        prompt_config_path=args.prompt_config_path,
+        jira_ticket=args.jira_ticket,
+        jira_base_url=args.jira_base_url,
+        jira_email=args.jira_email,
+        jira_api_token=args.jira_api_token,
         repos=list(args.repo or []),
         working_dir=Path(args.working_dir),
         context_roots=context_roots,
@@ -173,7 +120,7 @@ def main() -> None:
         change_agent_secret_env_keys=list(args.secret_env or []),
         datadog_team=args.datadog_team,
         datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
-        change_id=change_id,
+        change_id=args.change_id,
     )
     try:
         final_state = asyncio.run(run_workflow(state))
