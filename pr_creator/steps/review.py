@@ -44,6 +44,7 @@ class ReviewChanges(BaseNode):
         needs_changes, feedback = _agent.review(
             path,
             context_roots=ctx.state.context_roots,
+            task_prompt=ctx.state.prompt,
             secrets=ctx.state.change_agent_secrets,
         )
         logger.info(

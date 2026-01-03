@@ -11,6 +11,7 @@ class ReviewAgent(ABC):
         repo_path: Path,
         *,
         context_roots: list[str],
+        task_prompt: str | None = None,
         secrets: dict[str, str] | None = None,
     ) -> tuple[bool, str | None]:
         """

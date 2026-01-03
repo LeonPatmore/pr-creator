@@ -76,18 +76,40 @@ class CursorReviewAgent(ReviewAgent):
         repo_path: Path,
         *,
         context_roots: list[str],
+        task_prompt: str | None = None,
         secrets: dict[str, str] | None = None,
     ) -> tuple[bool, str | None]:
         repo_abs = str(repo_path.resolve())
+        task_section = ""
+        if task_prompt and task_prompt.strip():
+            task_section = (
+                "\n"
+                "Task instructions (source of truth):\n"
+                "----\n"
+                f"{task_prompt.strip()}\n"
+                "----\n"
+            )
+
         prompt = (
-            "You are reviewing the current repository state BEFORE committing.\n"
+            "You are reviewing the current repository state BEFORE submitting a PR.\n"
             "Please inspect all uncommitted work (unstaged + staged + untracked).\n"
             "\n"
-            "You may run any relevant commands (e.g. git status, git diff, tests) and read files.\n"
-            "If changes are needed before committing, list them clearly.\n"
+            "Important workflow context:\n"
+            "- Do NOT require changes to be staged. The submit step will stage everything automatically.\n"
             "\n"
-            "IMPORTANT OUTPUT FORMAT:\n"
-            "- If the repo is ready to commit, output exactly: READY_TO_COMMIT\n"
+            "Review rules:\n"
+            "- Treat the Task instructions (if provided below) as the source of truth.\n"
+            "- Only require changes if they are necessary for correctness, security (no leaked secrets/tokens),\n"
+            "  or to satisfy explicit requirements in the Task instructions.\n"
+            "- Do not request stylistic refactors or generic best-practice changes unless explicitly required.\n"
+            "- Example: flag unintended generated/build artifacts that got staged/committed (e.g. build outputs,\n"
+            "  dependency directories, caches). Require reverting them and/or adding correct `.gitignore` rules.\n"
+            f"{task_section}\n"
+            "You may run any relevant commands (e.g. git status, git diff, tests) and read files.\n"
+            "If changes are needed before submitting, list them clearly.\n"
+            "\n"
+            "IMPORTANT OUTPUT FORMAT (no extra text):\n"
+            "- If the repo is ready, output exactly: READY_TO_COMMIT\n"
             "- Otherwise output exactly: CHANGES_REQUIRED\\n<bullet list of required changes>\n"
         )
 
