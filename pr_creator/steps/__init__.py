@@ -7,6 +7,7 @@ from .naming import GenerateNames
 from .next_repo import NextRepo
 from .review import ReviewChanges
 from .submit import SubmitChanges
+from .wait_for_actions import WaitForActions
 from .workspace import WorkspaceRepo
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "NextRepo",
     "ReviewChanges",
     "SubmitChanges",
+    "WaitForActions",
     "WorkspaceRepo",
 ]

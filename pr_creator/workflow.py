@@ -12,6 +12,7 @@ from .steps import (
     NextRepo,
     ReviewChanges,
     SubmitChanges,
+    WaitForActions,
     WorkspaceRepo,
 )
 
@@ -30,6 +31,7 @@ def build_graph() -> Graph:
             ApplyChanges,
             ReviewChanges,
             SubmitChanges,
+            WaitForActions,
             CleanupRepo,
         ],
         state_type=WorkflowState,

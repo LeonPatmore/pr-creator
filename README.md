@@ -117,6 +117,14 @@ Repo processing behavior:
 **Review loop**
 - `REVIEW_MAX_ATTEMPTS` — max number of review→apply retries per repo when the review step returns `CHANGES_REQUIRED` (default: `2`).
 
+**CI / GitHub Actions (post-submit wait + auto-fix loop)**
+- `CI_FIX_MAX_ATTEMPTS` — max number of CI-fix→apply retries per repo when checks fail (default: `2`).
+- `CI_WAIT_TIMEOUT_SECONDS` — max time to wait for checks per attempt (default: `1800`).
+- `CI_WAIT_POLL_SECONDS` — poll interval while waiting (default: `15`).
+- `CI_ACCEPTABLE_CONCLUSIONS` — comma-separated conclusions treated as “passing” (default: `success,skipped,neutral`).
+- `CI_MAX_LOG_BYTES` — max bytes to download from a logs archive (default: `5000000`).
+- `CI_MAX_LOG_CHARS` — max characters of extracted logs included in the prompt (default: `30000`).
+
 **Logging & git identity**
 - `LOG_LEVEL` — logging level; default `INFO`.
 - `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` — author/committer; defaults to pr-creator placeholders if unset.

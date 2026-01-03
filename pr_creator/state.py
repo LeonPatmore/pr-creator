@@ -47,3 +47,7 @@ class WorkflowState:
     review_pending: Dict[str, str] = field(default_factory=dict)
     # Number of review->apply retries attempted per repo_url.
     review_attempts: Dict[str, int] = field(default_factory=dict)
+    # CI/action failure output that should be applied on the next ApplyChanges pass.
+    ci_pending: Dict[str, str] = field(default_factory=dict)
+    # Number of ci->apply retries attempted per repo_url.
+    ci_attempts: Dict[str, int] = field(default_factory=dict)

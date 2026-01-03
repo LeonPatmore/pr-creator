@@ -20,13 +20,26 @@ class ApplyChanges(BaseNode):
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
 
+        ci_pending = ctx.state.ci_pending.pop(self.repo_url, "").strip()
         pending = ctx.state.review_pending.pop(self.repo_url, "").strip()
-        if pending:
+        if ci_pending or pending:
+            sections: list[str] = []
+            if ci_pending:
+                sections.append(
+                    "## CRITICAL: Fix failing CI / GitHub Actions\n"
+                    "The PR is failing CI. Use the logs below to fix the issue.\n"
+                    "If there is a conflict, prioritize this section.\n\n"
+                    f"{ci_pending}\n"
+                )
+            if pending:
+                sections.append(
+                    "## CRITICAL: Address review feedback\n"
+                    "Apply the following review feedback before doing anything else.\n"
+                    "If there is a conflict, prioritize this section.\n\n"
+                    f"{pending}\n"
+                )
             prompt = (
-                "## CRITICAL: Address review feedback first\n"
-                "Apply the following review feedback before doing anything else.\n"
-                "If there is a conflict, prioritize this section.\n\n"
-                f"{pending}\n\n"
+                "\n\n".join(sections).rstrip() + "\n\n"
                 "## Original request (retain intent)\n"
                 f"{ctx.state.prompt.strip()}\n"
             )

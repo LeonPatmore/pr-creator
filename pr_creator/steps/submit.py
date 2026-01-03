@@ -29,6 +29,6 @@ class SubmitChanges(BaseNode):
         )
         if result:
             ctx.state.created_prs.append(result)
-        from .cleanup import CleanupRepo
+        from .wait_for_actions import WaitForActions
 
-        return CleanupRepo(repo_url=self.repo_url)
+        return WaitForActions(repo_url=self.repo_url)
