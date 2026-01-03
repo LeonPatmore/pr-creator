@@ -103,6 +103,44 @@ def _commit_changes_if_needed(repo: Repo, message: str) -> bool:
     return True
 
 
+def _remote_tracking_ref(branch: str) -> bytes:
+    return f"refs/remotes/origin/{branch}".encode()
+
+
+def _ahead_behind_vs_origin(repo: Repo, branch: str) -> tuple[int, int]:
+    """
+    Return (ahead, behind) commit counts for local HEAD vs origin/<branch>, using the
+    locally-fetched remote tracking ref.
+
+    If there is no origin tracking ref, treat it as (ahead=1, behind=0) so we attempt
+    to push the local branch to origin.
+    """
+    local = repo.head()
+    remote_ref = _remote_tracking_ref(branch)
+    try:
+        remote = repo.refs[remote_ref]
+    except KeyError:
+        remote = None
+    if remote is None:
+        return 1, 0
+
+    ahead = sum(
+        1
+        for _ in repo.get_walker(
+            include=[local],
+            exclude=[remote],
+        )
+    )
+    behind = sum(
+        1
+        for _ in repo.get_walker(
+            include=[remote],
+            exclude=[local],
+        )
+    )
+    return ahead, behind
+
+
 def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
     """Push branch to remote."""
     push_url = token_auth_github_url(origin_url, token)
@@ -248,49 +286,115 @@ class GithubSubmitter(SubmitChange):
         pr_title_final = pr_title or "Automated changes"
         commit_message_final = commit_message or "Automated changes"
 
+        def _push_if_ahead() -> bool:
+            if not self.github_token:
+                return False
+            ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
+            if behind > 0:
+                logger.warning(
+                    "[submit] local branch is behind origin/%s (behind=%s, ahead=%s); skipping push",
+                    current_branch,
+                    behind,
+                    ahead,
+                )
+                return False
+            if ahead == 0:
+                return False
+            logger.info(
+                "[submit] local branch ahead of origin/%s by %s commits; pushing",
+                current_branch,
+                ahead,
+            )
+            _push_branch(repo, current_branch, self.github_token, origin)
+            return True
+
         # Commit only when there is something to commit.
         # Note: `status()` is a cheap pre-check, but we still double-check after staging.
         if not _git_status_dirty(repo):
-            logger.info("[submit] no changes to commit; skipping PR creation")
-            return None
+            logger.info("[submit] no local file changes detected")
+            pushed = _push_if_ahead()
+            if not pushed:
+                logger.info("[submit] nothing to push; skipping PR creation")
+                return None
+
+            # We pushed commits, so we should return an existing PR if one exists.
+            if not remote_repo:
+                logger.warning("GITHUB_TOKEN not set; skipping PR creation")
+                return {"repo_url": origin, "branch": current_branch, "pr_url": None}
+
+            if current_branch == base_branch:
+                logger.warning(
+                    "Current branch '%s' matches base '%s'; skipping PR creation",
+                    current_branch,
+                    base_branch,
+                )
+                return {"repo_url": origin, "branch": current_branch, "pr_url": None}
+
+            existing = _return_existing_pr_if_any(
+                remote_repo, origin, current_branch, base_branch
+            )
+            if existing:
+                return existing
+
+            logger.info(
+                "[submit] creating PR head=%s base=%s", current_branch, base_branch
+            )
+            pr = remote_repo.create_pull(
+                title=pr_title_final,
+                body=pr_body,
+                head=current_branch,
+                base=base_branch,
+            )
+            return {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
 
         committed = _commit_changes_if_needed(repo, commit_message_final)
+        pushed = False
         if not committed:
             logger.info(
                 "[submit] no staged changes vs HEAD; skipping commit/PR creation"
             )
-            return None
+            # If changes were committed by the change agent (or the index is clean),
+            # we may still have local commits to push.
+            pushed = _push_if_ahead()
+            if not pushed:
+                return None
+        else:
+            # We created a new commit; always push it.
+            pushed = True
 
         if not self.github_token:
             logger.warning("GITHUB_TOKEN not set; skipping push/PR creation")
-            return {"repo_url": origin, "branch": branch, "pr_url": None}
+            return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
-        _push_branch(repo, branch, self.github_token, origin)
+        if pushed and committed:
+            _push_branch(repo, current_branch, self.github_token, origin)
 
         if not remote_repo:
             logger.warning("GITHUB_TOKEN not set; skipping PR creation")
-            return {"repo_url": origin, "branch": branch, "pr_url": None}
+            return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
         # Avoid creating PR when head matches base (no-op PR)
-        if branch == base_branch:
+        if current_branch == base_branch:
             logger.warning(
                 "Current branch '%s' matches base '%s'; skipping PR creation",
-                branch,
+                current_branch,
                 base_branch,
             )
-            return {"repo_url": origin, "branch": branch, "pr_url": None}
+            return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
-        existing = _return_existing_pr_if_any(remote_repo, origin, branch, base_branch)
+        existing = _return_existing_pr_if_any(
+            remote_repo, origin, current_branch, base_branch
+        )
         if existing:
             return existing
 
         # Create new PR
-        logger.info("[submit] creating PR head=%s base=%s", branch, base_branch)
+        logger.info("[submit] creating PR head=%s base=%s", current_branch, base_branch)
         try:
             pr = remote_repo.create_pull(
                 title=pr_title_final,
                 body=pr_body,
-                head=branch,
+                head=current_branch,
                 base=base_branch,
             )
         except GithubException as exc:
@@ -298,11 +402,11 @@ class GithubSubmitter(SubmitChange):
                 existing = _return_existing_pr_if_any(
                     remote_repo,
                     origin,
-                    branch,
+                    current_branch,
                     base_branch,
                     include_closed=True,
                 )
                 if existing:
                     return existing
             raise
-        return {"repo_url": origin, "branch": branch, "pr_url": pr.html_url}
+        return {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
