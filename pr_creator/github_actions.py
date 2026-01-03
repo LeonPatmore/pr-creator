@@ -286,6 +286,7 @@ def wait_for_ci(
     *,
     token: str,
     cfg: CiWaitConfig,
+    expected_head_sha: str | None = None,
 ) -> Tuple[bool, str]:
     parsed = parse_pr_url(pr_url)
     if not parsed:
@@ -298,6 +299,15 @@ def wait_for_ci(
 
     while time.time() < deadline:
         sha = get_pr_head_sha(owner, repo, pr_number, token=token)
+        if expected_head_sha and sha != expected_head_sha:
+            # Avoid evaluating CI on a stale PR head (GitHub can lag right after a push,
+            # or the PR may be pointing at a different head ref than what we just pushed).
+            last_state = "waiting_for_pr_head_update"
+            last_counts = (
+                f"pr_head_sha={sha} expected_head_sha={expected_head_sha} (waiting)"
+            )
+            time.sleep(cfg.poll_seconds)
+            continue
         check_runs_all = get_check_runs(owner, repo, sha, token=token)
         check_runs = _filter_check_runs_for_head_sha(check_runs_all, sha)
         combined_state = get_combined_status(owner, repo, sha, token=token)
@@ -340,9 +350,13 @@ def wait_for_ci(
 
         time.sleep(cfg.poll_seconds)
 
+    expected_line = (
+        f"- expected_head_sha: {expected_head_sha}\n" if expected_head_sha else ""
+    )
     return False, (
         "Timed out waiting for CI / GitHub Actions.\n\n"
         f"- PR: {pr_url}\n"
+        f"{expected_line}"
         f"- last_state: {last_state}\n"
         f"- last_observed: {last_counts}\n"
     )

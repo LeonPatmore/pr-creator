@@ -253,6 +253,7 @@ class GithubSubmitter(SubmitChange):
     ) -> Optional[Dict[str, str]]:
         repo = _load_repo(Path(repo_path))
         origin = strip_auth_from_url(_origin_url(repo))
+        pushed_sha: str | None = None
 
         # Ensure we are on the intended branch (change agents may checkout base)
         if branch:
@@ -287,6 +288,7 @@ class GithubSubmitter(SubmitChange):
         commit_message_final = commit_message or "Automated changes"
 
         def _push_if_ahead() -> bool:
+            nonlocal pushed_sha
             if not self.github_token:
                 return False
             ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
@@ -305,6 +307,7 @@ class GithubSubmitter(SubmitChange):
                 current_branch,
                 ahead,
             )
+            pushed_sha = repo.head().hex()
             _push_branch(repo, current_branch, self.github_token, origin)
             return True
 
@@ -334,6 +337,8 @@ class GithubSubmitter(SubmitChange):
                 remote_repo, origin, current_branch, base_branch
             )
             if existing:
+                if pushed_sha:
+                    existing["pushed_sha"] = pushed_sha
                 return existing
 
             logger.info(
@@ -345,7 +350,14 @@ class GithubSubmitter(SubmitChange):
                 head=current_branch,
                 base=base_branch,
             )
-            return {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
+            result = {
+                "repo_url": origin,
+                "branch": current_branch,
+                "pr_url": pr.html_url,
+            }
+            if pushed_sha:
+                result["pushed_sha"] = pushed_sha
+            return result
 
         committed = _commit_changes_if_needed(repo, commit_message_final)
         pushed = False
@@ -361,12 +373,14 @@ class GithubSubmitter(SubmitChange):
         else:
             # We created a new commit; always push it.
             pushed = True
+            pushed_sha = repo.head().hex()
 
         if not self.github_token:
             logger.warning("GITHUB_TOKEN not set; skipping push/PR creation")
             return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
         if pushed and committed:
+            pushed_sha = pushed_sha or repo.head().hex()
             _push_branch(repo, current_branch, self.github_token, origin)
 
         if not remote_repo:
@@ -386,6 +400,8 @@ class GithubSubmitter(SubmitChange):
             remote_repo, origin, current_branch, base_branch
         )
         if existing:
+            if pushed_sha:
+                existing["pushed_sha"] = pushed_sha
             return existing
 
         # Create new PR
@@ -409,4 +425,7 @@ class GithubSubmitter(SubmitChange):
                 if existing:
                     return existing
             raise
-        return {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
+        result = {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
+        if pushed_sha:
+            result["pushed_sha"] = pushed_sha
+        return result

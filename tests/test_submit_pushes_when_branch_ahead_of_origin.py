@@ -55,10 +55,12 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
     monkeypatch.setenv("GITHUB_TOKEN", "dummy")
 
     dummy_remote_repo = SimpleNamespace()
+    pushed_sha = repo.head().hex()
     expected = {
         "repo_url": "https://github.com/example/acme.git",
         "branch": "feature/test",
         "pr_url": "https://github.com/example/acme/pull/123",
+        "pushed_sha": pushed_sha,
     }
 
     monkeypatch.setattr(
