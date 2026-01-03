@@ -100,6 +100,7 @@ Repo processing behavior:
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
 
 **Prompt sources (optional)**
+- `PROMPT_CONFIG_OWNER` — GitHub owner for prompt config loading when `--prompt-config-owner` is omitted.
 - `JIRA_BASE_URL` — Jira base URL (e.g., https://your-org.atlassian.net) when using `--jira-ticket`.
 - `JIRA_EMAIL` — Jira account email for API token auth when using `--jira-ticket`.
 - `JIRA_API_TOKEN` — Jira API token when using `--jira-ticket`.
@@ -142,7 +143,7 @@ Repo processing behavior:
 - When using `--jira-ticket`, the change id is automatically set to the Jira ticket id for stable branch names.
 
 **Prompt config (alternative to passing prompts directly)**
-- `--prompt-config-owner` — GitHub owner of the prompt config repo. Must be set with `--prompt-config-repo` and `--prompt-config-path`.
+- `--prompt-config-owner` — GitHub owner of the prompt config repo (env fallback: `PROMPT_CONFIG_OWNER`). Must be set with `--prompt-config-repo` and `--prompt-config-path`.
 - `--prompt-config-repo` — GitHub repo name containing the prompt config file.
 - `--prompt-config-ref` — git ref for the prompt config file; default `main`.
 - `--prompt-config-path` — path to the YAML prompt config file inside the repo.

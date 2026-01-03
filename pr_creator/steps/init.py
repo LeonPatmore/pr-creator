@@ -66,14 +66,10 @@ def _determine_prompt_source(state: WorkflowState) -> PromptSource:
 
 
 def _load_prompt_from_prompt_config(state: WorkflowState) -> None:
-    if not (
-        state.prompt_config_owner
-        and state.prompt_config_repo
-        and state.prompt_config_path
-    ):
+    if not (state.prompt_config_repo and state.prompt_config_path):
         raise ValueError(
-            "When using prompt config, provide prompt_config_owner, "
-            "prompt_config_repo, and prompt_config_path"
+            "When using prompt config, provide prompt_config_repo and prompt_config_path "
+            "(and prompt_config_owner or PROMPT_CONFIG_OWNER)"
         )
 
     token = os.environ.get("GITHUB_TOKEN")

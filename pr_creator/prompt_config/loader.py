@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 import yaml
@@ -28,13 +29,21 @@ def _load_yaml_from_github(
 
 
 def load_prompts_from_config(
-    owner: str, repo: str, ref: str, path: str, token: Optional[str]
+    owner: Optional[str], repo: str, ref: str, path: str, token: Optional[str]
 ) -> Dict[str, str]:
     """
     Load change/relevance prompts from a YAML config in GitHub.
     Requires owner/repo/ref/path and uses the GitHub API (works with private repos).
     """
-    data: Dict[str, Any] = _load_yaml_from_github(owner, repo, ref, path, token)
+    resolved_owner = owner or os.environ.get("PROMPT_CONFIG_OWNER")
+    if not resolved_owner:
+        raise ValueError(
+            "Prompt config owner is required (provide --prompt-config-owner or set PROMPT_CONFIG_OWNER)"
+        )
+
+    data: Dict[str, Any] = _load_yaml_from_github(
+        resolved_owner, repo, ref, path, token
+    )
     change_prompt = data.get("change_prompt") or data.get("prompt")
     relevance_prompt = data.get("relevance_prompt")
     change_id = data.get("change_id")
@@ -44,7 +53,7 @@ def load_prompts_from_config(
         )
     logger.info(
         "Loaded prompt config from %s/%s@%s:%s (change_prompt len=%s, relevance_prompt len=%s%s)",
-        owner,
+        resolved_owner,
         repo,
         ref,
         path,

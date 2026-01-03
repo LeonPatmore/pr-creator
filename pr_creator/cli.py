@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--prompt-config-owner",
-        help="GitHub owner of the prompt config repo",
+        help="GitHub owner of the prompt config repo (env fallback: PROMPT_CONFIG_OWNER)",
     )
     parser.add_argument(
         "--prompt-config-repo",
