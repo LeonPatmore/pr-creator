@@ -26,6 +26,7 @@ _ACTIONS_DETAILS_RE = re.compile(
 class CiWaitConfig:
     timeout_seconds: int = 30 * 60
     poll_seconds: int = 15
+    heartbeat_seconds: int = 120
     max_log_bytes: int = 5_000_000
     max_log_chars: int = 30_000
     acceptable_conclusions: Tuple[str, ...] = ("success", "skipped", "neutral")
@@ -48,6 +49,7 @@ def load_ci_wait_config() -> CiWaitConfig:
     return CiWaitConfig(
         timeout_seconds=_env_int("CI_WAIT_TIMEOUT_SECONDS", 30 * 60),
         poll_seconds=_env_int("CI_WAIT_POLL_SECONDS", 15),
+        heartbeat_seconds=_env_int("CI_WAIT_HEARTBEAT_SECONDS", 120),
         max_log_bytes=_env_int("CI_MAX_LOG_BYTES", 5_000_000),
         max_log_chars=_env_int("CI_MAX_LOG_CHARS", 30_000),
         acceptable_conclusions=conclusions,
@@ -296,6 +298,59 @@ def wait_for_ci(
     deadline = time.time() + cfg.timeout_seconds
     last_state = "unknown"
     last_counts = ""
+    start_monotonic = time.monotonic()
+    last_heartbeat = 0.0
+
+    def _format_check_run(cr: Dict[str, Any]) -> str:
+        name = str(cr.get("name") or cr.get("app", {}).get("name") or "check")
+        status = str(cr.get("status") or "").lower() or "unknown"
+        conclusion = str(cr.get("conclusion") or "").lower() or ""
+        details_url = str(cr.get("details_url") or "")
+        run_id, job_id = _parse_actions_ids(details_url)
+        ids = []
+        if run_id:
+            ids.append(f"run:{run_id}")
+        if job_id:
+            ids.append(f"job:{job_id}")
+        ids_suffix = f" ({', '.join(ids)})" if ids else ""
+        concl = f"/{conclusion}" if conclusion else ""
+        return f"{name}={status}{concl}{ids_suffix}"
+
+    def _heartbeat(
+        *,
+        pr_url: str,
+        sha: str,
+        combined_state: str,
+        check_runs: List[Dict[str, Any]],
+        failed: List[Dict[str, Any]],
+    ) -> None:
+        nonlocal last_heartbeat
+        now = time.monotonic()
+        if cfg.heartbeat_seconds <= 0:
+            return
+        if last_heartbeat and (now - last_heartbeat) < cfg.heartbeat_seconds:
+            return
+        last_heartbeat = now
+
+        elapsed_s = int(now - start_monotonic)
+        pending_runs = [
+            cr
+            for cr in check_runs
+            if str(cr.get("status") or "").lower() in ("queued", "in_progress")
+        ]
+        pending_preview = ", ".join(_format_check_run(cr) for cr in pending_runs[:6])
+        failed_preview = ", ".join(_format_check_run(cr) for cr in failed[:4])
+        logger.info(
+            "[ci] heartbeat: pr=%s sha=%s state=%s pending=%s failed=%s elapsed=%ss%s%s",
+            pr_url,
+            sha[:12],
+            combined_state,
+            len(pending_runs),
+            len(failed),
+            elapsed_s,
+            f" pending_runs=[{pending_preview}]" if pending_preview else "",
+            f" failed_runs=[{failed_preview}]" if failed_preview else "",
+        )
 
     while time.time() < deadline:
         sha = get_pr_head_sha(owner, repo, pr_number, token=token)
@@ -306,6 +361,22 @@ def wait_for_ci(
             last_counts = (
                 f"pr_head_sha={sha} expected_head_sha={expected_head_sha} (waiting)"
             )
+            # Still waiting; emit an occasional heartbeat so long waits are visible.
+            if cfg.heartbeat_seconds > 0:
+                now = time.monotonic()
+                if (
+                    not last_heartbeat
+                    or (now - last_heartbeat) >= cfg.heartbeat_seconds
+                ):
+                    last_heartbeat = now
+                    elapsed_s = int(now - start_monotonic)
+                    logger.info(
+                        "[ci] heartbeat: pr=%s state=%s elapsed=%ss (%s)",
+                        pr_url,
+                        last_state,
+                        elapsed_s,
+                        last_counts,
+                    )
             time.sleep(cfg.poll_seconds)
             continue
         check_runs_all = get_check_runs(owner, repo, sha, token=token)
@@ -318,6 +389,15 @@ def wait_for_ci(
         last_counts = (
             f"checks={len(check_runs)} failed={len(failed)} state={combined_state}"
         )
+
+        if pending:
+            _heartbeat(
+                pr_url=pr_url,
+                sha=sha,
+                combined_state=combined_state,
+                check_runs=check_runs,
+                failed=failed,
+            )
 
         if not pending:
             # If there are any checks, require no failures. If there are no checks,

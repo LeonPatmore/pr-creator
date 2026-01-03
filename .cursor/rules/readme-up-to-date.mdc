@@ -1,0 +1,13 @@
+---
+description: Ensure README stays accurate as behavior/config changes.
+alwaysApply: true
+---
+
+After making changes, do a quick pass to ensure `README.md` is still up to date.
+
+In particular, if you add/change any of the following, update the README in the same PR:
+- New/changed environment variables (document name, purpose, default)
+- New/changed CLI flags or usage examples
+- Behavior changes that users would notice (e.g., logging, workflow steps, retries/timeouts)
+
+Keep README updates concise and colocated with the relevant section.
