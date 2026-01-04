@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "PyGithub",
+  "pydantic-ai",
   "pydantic-graph",
   "dulwich",
   "PyYAML",

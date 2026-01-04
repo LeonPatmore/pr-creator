@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from pr_creator.change_agents import get_change_agent
-
 from pydantic_graph import BaseNode, End, GraphRunContext
+
+from pr_creator.workflows.repo_change.change_agents import get_change_agent
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ class ApplyChanges(BaseNode):
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
 
+        base_prompt = ctx.state.prompt
         ci_pending = ctx.state.ci_pending.pop(self.repo_url, "").strip()
         pending = ctx.state.review_pending.pop(self.repo_url, "").strip()
         if ci_pending or pending:
@@ -39,12 +40,14 @@ class ApplyChanges(BaseNode):
                     f"{pending}\n"
                 )
             prompt = (
-                "\n\n".join(sections).rstrip() + "\n\n"
-                "## Original request (retain intent)\n"
-                f"{ctx.state.prompt.strip()}\n"
+                "\n\n".join(sections).rstrip()
+                + "\n\n"
+                + "## Original request (retain intent)\n"
+                + f"{base_prompt.strip()}\n"
             )
         else:
-            prompt = ctx.state.prompt
+            prompt = base_prompt
+
         _agent.run(
             path,
             prompt,

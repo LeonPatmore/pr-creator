@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.review_agents import (
+from pr_creator.workflows.repo_change.review_agents import (
     ReviewAgent,
     get_review_agent,
     get_review_max_attempts,

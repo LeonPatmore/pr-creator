@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.naming_agents import get_naming_agent
+from pr_creator.workflows.repo_change.naming_agents import get_naming_agent
 
 logger = logging.getLogger(__name__)
 

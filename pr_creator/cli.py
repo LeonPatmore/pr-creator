@@ -4,12 +4,12 @@ import json
 from pathlib import Path
 
 from .logging_config import configure_logging
-from .state import WorkflowState
-from .workflow import run_workflow
+from pr_creator.workflows.orchestrator.state import OrchestratorState
+from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
 from pr_creator.context_roots import normalize_context_roots
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args_legacy() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", required=False)
     parser.add_argument(
@@ -96,34 +96,35 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    args = parse_args()
+    args = parse_args_legacy()
     configure_logging(args.log_level, force=True)
 
     context_roots = normalize_context_roots(list(args.context_root or []))
 
-    state = WorkflowState(
-        prompt="",
-        relevance_prompt=args.relevance_prompt or "",
-        cli_prompt=args.prompt,
-        prompt_config_owner=args.prompt_config_owner,
-        prompt_config_repo=args.prompt_config_repo,
-        prompt_config_ref=args.prompt_config_ref,
-        prompt_config_path=args.prompt_config_path,
-        jira_ticket=args.jira_ticket,
-        jira_base_url=args.jira_base_url,
-        jira_email=args.jira_email,
-        jira_api_token=args.jira_api_token,
-        repos=list(args.repo or []),
-        working_dir=Path(args.working_dir),
-        context_roots=context_roots,
-        change_agent_secret_kv_pairs=list(args.secret or []),
-        change_agent_secret_env_keys=list(args.secret_env or []),
-        datadog_team=args.datadog_team,
-        datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
-        change_id=args.change_id,
-    )
     try:
-        final_state = asyncio.run(run_workflow(state))
+        # Orchestrator owns discovery/iteration and is always enabled.
+        state = OrchestratorState(
+            prompt="",
+            relevance_prompt=args.relevance_prompt or "",
+            cli_prompt=args.prompt,
+            prompt_config_owner=args.prompt_config_owner,
+            prompt_config_repo=args.prompt_config_repo,
+            prompt_config_ref=args.prompt_config_ref,
+            prompt_config_path=args.prompt_config_path,
+            jira_ticket=args.jira_ticket,
+            jira_base_url=args.jira_base_url,
+            jira_email=args.jira_email,
+            jira_api_token=args.jira_api_token,
+            repos=list(args.repo or []),
+            working_dir=Path(args.working_dir),
+            context_roots=context_roots,
+            change_agent_secret_kv_pairs=list(args.secret or []),
+            change_agent_secret_env_keys=list(args.secret_env or []),
+            datadog_team=args.datadog_team,
+            datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
+            change_id=args.change_id,
+        )
+        final_state = asyncio.run(run_orchestrator_workflow(state))
     except ValueError as e:
         raise SystemExit(str(e)) from e
     summary = {

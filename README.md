@@ -172,6 +172,16 @@ Repo processing behavior:
 - Without `--change-id`, a fresh workspace with a random suffix is created and cleaned up after each repo finishes.
 - To start fresh, remove the working directory (e.g., `rm -rf .repos`).
 
+### Orchestration (default)
+By default, pr-creator runs a **per-repo orchestration step** before applying changes:
+
+- Repo discovery
+- For each repo:
+  - Workspace + relevance check
+  - **Orchestrate**: derive a repo-specific prompt (read-only analysis)
+  - Apply changes + review + submit PR + wait for CI + cleanup
+Orchestration is always enabled.
+
 ### Example (Docker)
 
 ```sh

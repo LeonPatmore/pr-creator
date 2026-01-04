@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import os
 
-from .base import EvaluateAgent
-from .cursor_agent import CursorEvaluateAgent
 from pr_creator.cursor_utils.runners import get_cursor_runner
+from pr_creator.workflows.orchestrator.evaluate_relevance_step.evaluate_agents.base import (
+    EvaluateAgent,
+)
+from pr_creator.workflows.orchestrator.evaluate_relevance_step.evaluate_agents.cursor_agent import (
+    CursorEvaluateAgent,
+)
 
 DEFAULT_AGENT = "cursor"
 
@@ -14,6 +18,3 @@ def get_evaluate_agent(name: str | None = None) -> EvaluateAgent:
     if agent_name == "cursor":
         return CursorEvaluateAgent(get_cursor_runner())
     raise ValueError(f"Unknown evaluate agent: {agent_name}")
-
-
-__all__ = ["EvaluateAgent", "CursorEvaluateAgent", "get_evaluate_agent"]

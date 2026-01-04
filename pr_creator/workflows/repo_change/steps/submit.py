@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from pr_creator.submit_change import get_submitter
-
 from pydantic_graph import BaseNode, End, GraphRunContext
+
+from pr_creator.workflows.repo_change.submit_change import get_submitter
 
 logger = logging.getLogger(__name__)
 

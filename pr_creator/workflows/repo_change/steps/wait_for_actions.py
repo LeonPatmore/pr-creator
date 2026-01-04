@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.github_actions import load_ci_wait_config, wait_for_ci
+from pr_creator.workflows.repo_change.github_actions import (
+    load_ci_wait_config,
+    wait_for_ci,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +19,6 @@ def _max_ci_attempts() -> int:
         return int(os.environ.get("CI_FIX_MAX_ATTEMPTS", "2").strip())
     except Exception:
         return 2
-
-
-def _last_pr_url_for_repo(ctx: GraphRunContext, repo_url: str) -> str | None:
-    for pr in reversed(ctx.state.created_prs):
-        if pr.get("repo_url") == repo_url:
-            return pr.get("pr_url")
-    return None
 
 
 def _last_pr_record_for_repo(

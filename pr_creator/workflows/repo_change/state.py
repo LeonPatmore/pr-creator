@@ -4,32 +4,21 @@ from typing import Dict, List, Optional
 
 
 @dataclass
-class WorkflowState:
+class RepoChangeState:
+    """
+    State for the repo-change workflow.
+
+    This workflow assumes:
+    - it is operating on a single repo (passed as a parameter to the runner)
+    - prompt/discovery/orchestration inputs were handled upstream (e.g. orchestrator)
+    """
+
     prompt: str
-    relevance_prompt: str
-    repos: List[str]
     working_dir: Path
-    # Optional CLI prompt which, when used with Jira/prompt-config, is treated as
-    # highest-priority instructions.
-    cli_prompt: Optional[str] = None
-    # Prompt-config source inputs (loaded during InitWorkflow).
-    prompt_config_owner: Optional[str] = None
-    prompt_config_repo: Optional[str] = None
-    prompt_config_ref: Optional[str] = None
-    prompt_config_path: Optional[str] = None
-    # Jira prompt source inputs (loaded during InitWorkflow).
-    jira_ticket: Optional[str] = None
-    jira_base_url: Optional[str] = None
-    jira_email: Optional[str] = None
-    jira_api_token: Optional[str] = None
     context_roots: List[str] = field(default_factory=list)
     # Extra env vars (often secrets) forwarded to the change agent process/container.
     # Values should never be logged.
     change_agent_secrets: Dict[str, str] = field(default_factory=dict)
-    # Raw secret inputs (e.g. from CLI) that are resolved into `change_agent_secrets`
-    # during workflow setup.
-    change_agent_secret_kv_pairs: List[str] = field(default_factory=list)
-    change_agent_secret_env_keys: List[str] = field(default_factory=list)
     cloned: Dict[str, Path] = field(default_factory=dict)
     branches: Dict[str, str] = field(default_factory=dict)
     pr_titles: Dict[str, str] = field(default_factory=dict)
@@ -38,8 +27,6 @@ class WorkflowState:
     processed: List[str] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)
     created_prs: List[Dict[str, str]] = field(default_factory=list)
-    datadog_team: Optional[str] = None
-    datadog_site: str = "datadoghq.com"
     change_id: Optional[str] = None
     # Raw review output from the review step, keyed by repo_url.
     review_feedback: Dict[str, str] = field(default_factory=dict)
