@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import docker
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ from pr_creator.workspace_mounts import (
     WORKSPACE_ROOT,
     workspace_prompt_prefix,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_workspace_volumes(
@@ -95,6 +98,14 @@ class DockerCursorRunner:
                 ["--output-format", "stream-json", "--stream-partial-output"]
             )
         command.extend(["--print", full_prompt])
+
+        logger.info(
+            "[cursor-runner] runner=docker image=%s model=%s stream_partial_output=%s workdir=%s",
+            image,
+            model,
+            stream_partial_output,
+            workdir,
+        )
 
         output_bytes = client.containers.run(
             image,

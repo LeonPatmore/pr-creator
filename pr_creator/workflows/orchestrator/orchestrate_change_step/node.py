@@ -48,7 +48,26 @@ class OrchestrateChange(BaseNode):
         async def _tool_repo_change(repo_url: str, prompt: str) -> list[CreatedPR]:
             ctx.state.repo_prompts[repo_url] = prompt
             nonlocal tool_prs
+            logger.info(
+                "[orchestrator] calling repo_change: repo_url=%s prompt_len=%s prompt_snippet=%r",
+                repo_url,
+                len(prompt or ""),
+                (prompt or "").strip().replace("\r\n", "\n")[:300],
+            )
             tool_prs = await _repo_change_tool(ctx, repo_url=repo_url, prompt=prompt)
+            logger.info(
+                "[orchestrator] repo_change returned %d PR record(s): %s",
+                len(tool_prs),
+                [
+                    {
+                        "repo_url": p.get("repo_url"),
+                        "branch": p.get("branch"),
+                        "pr_url": p.get("pr_url"),
+                        "pushed_sha": p.get("pushed_sha"),
+                    }
+                    for p in tool_prs
+                ],
+            )
             return [CreatedPR.model_validate(p) for p in tool_prs]
 
         agent, tool_called = build_orchestrate_change_agent(

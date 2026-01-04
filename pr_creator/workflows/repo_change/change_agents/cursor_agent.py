@@ -19,8 +19,15 @@ class CursorChangeAgent(ChangeAgent):
         secrets: dict[str, str] | None = None,
     ) -> None:
         repo_abs = str(repo_path.resolve())
+        guarded_prompt = (
+            "IMPORTANT:\n"
+            "- Do NOT change file line endings (do not convert LF<->CRLF).\n"
+            "- Avoid whitespace-only changes.\n"
+            "- Only modify files that are necessary to satisfy the task.\n"
+            "\n" + (prompt or "")
+        )
         self._runner.run_prompt(
-            prompt,
+            guarded_prompt,
             remove=False,
             repo_abs=repo_abs,
             context_roots=context_roots,

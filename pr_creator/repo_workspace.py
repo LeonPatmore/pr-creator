@@ -95,7 +95,10 @@ def load_or_clone_repo(target: Path, repo_url: str, clone_url: str) -> Repo:
         else:
             logger.info("No existing workspace at %s; will clone", target)
     logger.info("Cloning %s -> %s", repo_url, target)
-    porcelain.clone(clone_url, target, checkout=True)
+    # Silence noisy clone progress output (Counting objects / Compressing objects / etc.).
+    out = io.StringIO()
+    err = io.BytesIO()
+    porcelain.clone(clone_url, target, checkout=True, outstream=out, errstream=err)
     return Repo.discover(str(target))
 
 
@@ -415,7 +418,12 @@ def prepare_workspace(
             fetch_refs(repo_obj, clone_url, repo)
         except Exception:
             shutil.rmtree(target, ignore_errors=True)
-            porcelain.clone(clone_url, str(target), checkout=True)
+            # Silence noisy clone progress output.
+            out = io.StringIO()
+            err = io.BytesIO()
+            porcelain.clone(
+                clone_url, str(target), checkout=True, outstream=out, errstream=err
+            )
             repo_obj = Repo.discover(str(target))
     else:
         if target.exists():
@@ -423,7 +431,12 @@ def prepare_workspace(
         logger.info(
             "%s cloning %s -> %s", "[change]" if is_change else "[plan]", repo, target
         )
-        porcelain.clone(clone_url, str(target), checkout=True)
+        # Silence noisy clone progress output.
+        out = io.StringIO()
+        err = io.BytesIO()
+        porcelain.clone(
+            clone_url, str(target), checkout=True, outstream=out, errstream=err
+        )
         repo_obj = Repo.discover(str(target))
 
     if not is_change:

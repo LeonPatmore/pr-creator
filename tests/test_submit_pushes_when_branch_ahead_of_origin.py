@@ -7,7 +7,7 @@ import pytest
 from dulwich import porcelain
 from dulwich.repo import Repo
 
-import pr_creator.submit_change.github_submitter as github_submitter
+import pr_creator.workflows.repo_change.submit_change.github_submitter as github_submitter
 
 
 def _init_repo(repo_dir: Path) -> tuple[Repo, bytes]:
@@ -55,7 +55,7 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
     monkeypatch.setenv("GITHUB_TOKEN", "dummy")
 
     dummy_remote_repo = SimpleNamespace()
-    pushed_sha = repo.head().hex()
+    pushed_sha = github_submitter._sha_to_hex(repo.head())
     expected = {
         "repo_url": "https://github.com/example/acme.git",
         "branch": "feature/test",

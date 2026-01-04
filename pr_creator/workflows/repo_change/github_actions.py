@@ -27,6 +27,7 @@ class CiWaitConfig:
     timeout_seconds: int = 30 * 60
     poll_seconds: int = 15
     heartbeat_seconds: int = 120
+    pending_no_checks_grace_seconds: int = 60
     max_log_bytes: int = 5_000_000
     max_log_chars: int = 30_000
     acceptable_conclusions: Tuple[str, ...] = ("success", "skipped", "neutral")
@@ -50,6 +51,9 @@ def load_ci_wait_config() -> CiWaitConfig:
         timeout_seconds=_env_int("CI_WAIT_TIMEOUT_SECONDS", 30 * 60),
         poll_seconds=_env_int("CI_WAIT_POLL_SECONDS", 15),
         heartbeat_seconds=_env_int("CI_WAIT_HEARTBEAT_SECONDS", 120),
+        pending_no_checks_grace_seconds=_env_int(
+            "CI_PENDING_NO_CHECKS_GRACE_SECONDS", 60
+        ),
         max_log_bytes=_env_int("CI_MAX_LOG_BYTES", 5_000_000),
         max_log_chars=_env_int("CI_MAX_LOG_CHARS", 30_000),
         acceptable_conclusions=conclusions,
@@ -183,6 +187,21 @@ def get_combined_status(owner: str, repo: str, sha: str, *, token: str) -> str:
     return str(data.get("state") or "unknown").lower()
 
 
+def get_combined_status_and_statuses(
+    owner: str, repo: str, sha: str, *, token: str
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Fetch the "combined status" state plus the underlying status contexts.
+
+    This is distinct from check-runs: some CI systems report only commit-status
+    contexts (Statuses API) and will never appear as check-runs.
+    """
+    data = _get_json(f"{_api_base(owner, repo)}/commits/{sha}/status", token=token)
+    state = str(data.get("state") or "unknown").lower()
+    statuses = list(data.get("statuses") or [])
+    return state, statuses
+
+
 def _failed_check_runs(
     check_runs: Iterable[Dict[str, Any]], acceptable_conclusions: Tuple[str, ...]
 ) -> List[Dict[str, Any]]:
@@ -197,12 +216,20 @@ def _failed_check_runs(
     return failed
 
 
-def _has_pending(check_runs: Iterable[Dict[str, Any]], combined_state: str) -> bool:
-    if combined_state == "pending":
-        return True
+def _has_pending(
+    check_runs: Iterable[Dict[str, Any]],
+    combined_state: str,
+    statuses: Iterable[Dict[str, Any]],
+) -> bool:
+    # Prefer concrete signals over the summary combined_state. GitHub can report
+    # combined_state="pending" transiently even when no checks/status contexts
+    # have appeared yet.
     for cr in check_runs:
         status = str(cr.get("status") or "").lower()
         if status in ("queued", "in_progress"):
+            return True
+    for st in statuses:
+        if str(st.get("state") or "").lower() == "pending":
             return True
     return False
 
@@ -300,6 +327,8 @@ def wait_for_ci(
     last_counts = ""
     start_monotonic = time.monotonic()
     last_heartbeat = 0.0
+    pending_without_checks_since: float | None = None
+    pending_without_checks_grace_s = float(cfg.pending_no_checks_grace_seconds)
 
     def _format_check_run(cr: Dict[str, Any]) -> str:
         name = str(cr.get("name") or cr.get("app", {}).get("name") or "check")
@@ -322,6 +351,7 @@ def wait_for_ci(
         sha: str,
         combined_state: str,
         check_runs: List[Dict[str, Any]],
+        statuses: List[Dict[str, Any]],
         failed: List[Dict[str, Any]],
     ) -> None:
         nonlocal last_heartbeat
@@ -338,17 +368,30 @@ def wait_for_ci(
             for cr in check_runs
             if str(cr.get("status") or "").lower() in ("queued", "in_progress")
         ]
+        pending_statuses = [
+            st for st in statuses if str(st.get("state") or "").lower() == "pending"
+        ]
         pending_preview = ", ".join(_format_check_run(cr) for cr in pending_runs[:6])
+        pending_status_preview = ", ".join(
+            str(st.get("context") or st.get("description") or "status")[:60]
+            for st in pending_statuses[:6]
+        )
         failed_preview = ", ".join(_format_check_run(cr) for cr in failed[:4])
         logger.info(
-            "[ci] heartbeat: pr=%s sha=%s state=%s pending=%s failed=%s elapsed=%ss%s%s",
+            "[ci] heartbeat: pr=%s sha=%s state=%s pending=%s pending_statuses=%s failed=%s elapsed=%ss%s%s%s",
             pr_url,
             sha[:12],
             combined_state,
             len(pending_runs),
+            len(pending_statuses),
             len(failed),
             elapsed_s,
             f" pending_runs=[{pending_preview}]" if pending_preview else "",
+            (
+                f" pending_statuses=[{pending_status_preview}]"
+                if pending_status_preview
+                else ""
+            ),
             f" failed_runs=[{failed_preview}]" if failed_preview else "",
         )
 
@@ -381,21 +424,47 @@ def wait_for_ci(
             continue
         check_runs_all = get_check_runs(owner, repo, sha, token=token)
         check_runs = _filter_check_runs_for_head_sha(check_runs_all, sha)
-        combined_state = get_combined_status(owner, repo, sha, token=token)
-
-        pending = _has_pending(check_runs, combined_state)
-        failed = _failed_check_runs(check_runs, cfg.acceptable_conclusions)
-        last_state = combined_state
-        last_counts = (
-            f"checks={len(check_runs)} failed={len(failed)} state={combined_state}"
+        combined_state, statuses = get_combined_status_and_statuses(
+            owner, repo, sha, token=token
         )
 
-        if pending:
+        pending = _has_pending(check_runs, combined_state, statuses)
+        failed = _failed_check_runs(check_runs, cfg.acceptable_conclusions)
+        last_state = combined_state
+        last_counts = f"checks={len(check_runs)} statuses={len(statuses)} failed={len(failed)} state={combined_state}"
+
+        # If GitHub claims "pending" but there are no check-runs and no status
+        # contexts, we likely have a repo with no CI configured (or a transient
+        # API delay). Don't wait forever.
+        if (
+            combined_state == "pending"
+            and not check_runs
+            and not statuses
+            and pending_without_checks_since is None
+        ):
+            pending_without_checks_since = time.monotonic()
+        if combined_state != "pending" or check_runs or statuses:
+            pending_without_checks_since = None
+
+        if (
+            pending_without_checks_since is not None
+            and (time.monotonic() - pending_without_checks_since)
+            >= pending_without_checks_grace_s
+        ):
+            grace_s = int(pending_without_checks_grace_s)
+            return (
+                True,
+                "[ci] skipping wait: combined status stayed pending for "
+                f"{grace_s}s but no checks/statuses were found for {pr_url}",
+            )
+
+        if pending or combined_state == "pending":
             _heartbeat(
                 pr_url=pr_url,
                 sha=sha,
                 combined_state=combined_state,
                 check_runs=check_runs,
+                statuses=statuses,
                 failed=failed,
             )
 

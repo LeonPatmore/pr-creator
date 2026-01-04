@@ -96,8 +96,14 @@ Repo processing behavior:
 - `CURSOR_STREAM_MODE` — cursor streaming mode; default `assistant`.
 - `CURSOR_STREAM_SHOW_THINKING` — enable showing thinking output; set to `1|true|yes|on` to enable.
 
+**Orchestration**
+- `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `gpt-5.2`.
+
 **Agent context (optional)**
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
+
+**Apply safety (optional)**
+- `CHANGE_ALLOWED_PATHS` — comma-separated glob patterns of paths the change agent is allowed to modify. If set, any changes outside this allowlist are reverted after the change agent runs (useful for strict tasks like “only edit README.md”).
 
 **Prompt sources (optional)**
 - `PROMPT_CONFIG_OWNER` — GitHub owner for prompt config loading when `--prompt-config-owner` is omitted.
@@ -123,6 +129,7 @@ Repo processing behavior:
 - `CI_WAIT_TIMEOUT_SECONDS` — max time to wait for checks per attempt (default: `1800`).
 - `CI_WAIT_POLL_SECONDS` — poll interval while waiting (default: `15`).
 - `CI_WAIT_HEARTBEAT_SECONDS` — heartbeat log interval while waiting for checks (default: `120`).
+- `CI_PENDING_NO_CHECKS_GRACE_SECONDS` — if GitHub reports `pending` but no check-runs or commit-status contexts appear, stop waiting after this many seconds (default: `60`).
 - `CI_ACCEPTABLE_CONCLUSIONS` — comma-separated conclusions treated as “passing” (default: `success,skipped,neutral`).
 - `CI_MAX_LOG_BYTES` — max bytes to download from a logs archive (default: `5000000`).
 - `CI_MAX_LOG_CHARS` — max characters of extracted logs included in the prompt (default: `30000`).

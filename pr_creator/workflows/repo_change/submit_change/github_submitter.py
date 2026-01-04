@@ -27,6 +27,28 @@ def _load_repo(repo_path: Path) -> Repo:
     return Repo.discover(str(repo_path))
 
 
+def _sha_to_hex(sha: bytes) -> str:
+    """
+    Dulwich SHA values can appear in a couple forms depending on version/context:
+    - 20 raw bytes (binary SHA1)
+    - 40 ASCII bytes of hex
+
+    Always return the canonical 40-char hex string.
+    """
+    if not sha:
+        return ""
+    if len(sha) == 20:
+        return sha.hex()
+    if len(sha) == 40:
+        try:
+            s = sha.decode("ascii")
+            if all(c in "0123456789abcdefABCDEF" for c in s):
+                return s.lower()
+        except Exception:
+            pass
+    return sha.hex()
+
+
 def _origin_url(repo: Repo) -> str:
     cfg: StackedConfig = repo.get_config()
     url_bytes = cfg.get((b"remote", b"origin"), b"url")
@@ -307,7 +329,7 @@ class GithubSubmitter(SubmitChange):
                 current_branch,
                 ahead,
             )
-            pushed_sha = repo.head().hex()
+            pushed_sha = _sha_to_hex(repo.head())
             _push_branch(repo, current_branch, self.github_token, origin)
             return True
 
@@ -373,14 +395,14 @@ class GithubSubmitter(SubmitChange):
         else:
             # We created a new commit; always push it.
             pushed = True
-            pushed_sha = repo.head().hex()
+            pushed_sha = _sha_to_hex(repo.head())
 
         if not self.github_token:
             logger.warning("GITHUB_TOKEN not set; skipping push/PR creation")
             return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
         if pushed and committed:
-            pushed_sha = pushed_sha or repo.head().hex()
+            pushed_sha = pushed_sha or _sha_to_hex(repo.head())
             _push_branch(repo, current_branch, self.github_token, origin)
 
         if not remote_repo:

@@ -20,6 +20,23 @@ def _parse_owner_repo(repo_url: str) -> Optional[Tuple[str, str]]:
     return None
 
 
+def _e2e_ci_speed_env() -> dict[str, str]:
+    # e2e speed-ups: don't spend minutes waiting on CI in tests.
+    # Some repos return combined_status=pending with no checks/statuses;
+    # keep the grace small so the test doesn't stall.
+    return {
+        "CI_WAIT_TIMEOUT_SECONDS": "120",
+        "CI_WAIT_POLL_SECONDS": "5",
+        "CI_WAIT_HEARTBEAT_SECONDS": "10",
+        "CI_PENDING_NO_CHECKS_GRACE_SECONDS": "5",
+    }
+
+
+def _e2e_change_guard_env() -> dict[str, str]:
+    # Prevent the change agent from touching unrelated files in e2e.
+    return {"CHANGE_ALLOWED_PATHS": "README.md"}
+
+
 def _run_cli_and_assert_pr(
     repo_arg: str, repo_slug: str, env: dict, change_id: str
 ) -> None:
@@ -140,6 +157,8 @@ def test_cli_creates_pr_and_cleans_up(use_repo_name_only: bool) -> None:
     env.update(
         {
             "SUBMIT_PR_BODY": f"Automated test body {marker}",
+            **_e2e_ci_speed_env(),
+            **_e2e_change_guard_env(),
         }
     )
 
@@ -176,6 +195,8 @@ def test_cli_reuses_workspace_and_creates_two_commits() -> None:
     env.update(
         {
             "SUBMIT_PR_BODY": f"Automated test body {marker}",
+            **_e2e_ci_speed_env(),
+            **_e2e_change_guard_env(),
         }
     )
 
