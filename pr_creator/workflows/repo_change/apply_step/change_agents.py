@@ -41,10 +41,6 @@ class CursorChangeAgent(ChangeAgent):
             "- Do NOT change file line endings (do not convert LF<->CRLF).\n"
             "- Avoid whitespace-only changes.\n"
             "- Only modify files that are necessary to satisfy the task.\n"
-            "- Do NOT add build steps to production deploy workflows (no Docker build / image build / artifact build) unless there is an explicit, justified exception.\n"
-            "  Builds should occur in staging or development workflows (CI) and production should deploy pre-built artifacts/images.\n"
-            "  Rationale: reproducibility, faster deploys, avoiding drift; promote build-once-deploy-many.\n"
-            "  If changes touch deployment workflows, prefer minimal changes and avoid altering production pipelines.\n"
             "\n" + (prompt or "")
         )
         self._runner.run_prompt(

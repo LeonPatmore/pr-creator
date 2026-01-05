@@ -50,3 +50,49 @@ def test_handles_multiline_json() -> None:
   "short_desc": "add-feature"
 }"""
     assert _strip_markdown_code_fences(input_text) == expected
+
+
+def test_extracts_json_with_text_before() -> None:
+    """Test that JSON is extracted when there's explanatory text before the code fence."""
+    input_text = """Update complete. Here is the summary.
+
+Some more text explaining what was done.
+
+```json
+{"short_desc": "update-production-deploy-prompt-rules"}
+```"""
+    expected = '{"short_desc": "update-production-deploy-prompt-rules"}'
+    assert _strip_markdown_code_fences(input_text) == expected
+
+
+def test_extracts_last_code_block_when_multiple_exist() -> None:
+    """Test that the last code block is extracted when multiple code blocks exist."""
+    input_text = """First some text.
+
+```json
+{"short_desc": "wrong-one"}
+```
+
+More text in between.
+
+```json
+{"short_desc": "correct-one"}
+```"""
+    expected = '{"short_desc": "correct-one"}'
+    assert _strip_markdown_code_fences(input_text) == expected
+
+
+def test_handles_mixed_content_and_code_blocks() -> None:
+    """Test extraction with mixed markdown content."""
+    input_text = """## Summary
+
+Updated the base prompt to include:
+
+1. A "Production Deploy Workflows - CRITICAL RULES" section
+2. Some bullet points
+
+```json
+{"short_desc": "add-critical-production-rules"}
+```"""
+    expected = '{"short_desc": "add-critical-production-rules"}'
+    assert _strip_markdown_code_fences(input_text) == expected

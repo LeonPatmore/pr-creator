@@ -18,16 +18,21 @@ def _strip_markdown_code_fences(text: str) -> str:
     Strip markdown code fences (```json ... ```) from LLM output before parsing JSON.
 
     Handles:
-    - ```json\n{...}\n```
-    - ```\n{...}\n```
-    - Just returns the content between fences if present, otherwise returns original text.
+    - ```json\n{...}\n``` anywhere in the text
+    - ```\n{...}\n``` anywhere in the text
+    - Prioritizes the last code block if multiple exist
+    - Returns the content between fences if present, otherwise returns original text.
     """
     stripped = text.strip()
-    # Match optional language tag after opening fence
-    pattern = r"^```(?:json|jsonc)?\s*\n(.*?)\n```$"
-    match = re.match(pattern, stripped, re.DOTALL)
-    if match:
-        return match.group(1).strip()
+    # Find all code blocks with optional language tags
+    # Pattern matches: ```json (or ```jsonc or just ```) followed by content then ```
+    pattern = r"```(?:json|jsonc)?\s*\n(.*?)\n```"
+    matches = list(re.finditer(pattern, stripped, re.DOTALL))
+
+    if matches:
+        # Use the last match (most likely to be the actual answer)
+        return matches[-1].group(1).strip()
+
     return stripped
 
 
