@@ -20,6 +20,23 @@ def _parse_owner_repo(repo_url: str) -> Optional[Tuple[str, str]]:
     return None
 
 
+def _e2e_ci_speed_env() -> dict[str, str]:
+    # e2e speed-ups: don't spend minutes waiting on CI in tests.
+    # Some repos return combined_status=pending with no checks/statuses;
+    # keep the grace small so the test doesn't stall.
+    return {
+        "CI_WAIT_TIMEOUT_SECONDS": "120",
+        "CI_WAIT_POLL_SECONDS": "5",
+        "CI_WAIT_HEARTBEAT_SECONDS": "10",
+        "CI_PENDING_NO_CHECKS_GRACE_SECONDS": "5",
+    }
+
+
+def _e2e_change_guard_env() -> dict[str, str]:
+    # Prevent the change agent from touching unrelated files in e2e.
+    return {"CHANGE_ALLOWED_PATHS": "README.md"}
+
+
 def _run_cli_and_assert_pr(
     repo_arg: str, repo_slug: str, env: dict, change_id: str
 ) -> None:
@@ -83,6 +100,10 @@ def _run_cli_twice_and_assert_two_commits(
 
     project_root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory() as tmpdir:
+        log_dir = Path(tmpdir) / "cursor-output-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        env = {**env, "PR_CREATOR_CURSOR_OUTPUT_LOG_DIR": str(log_dir)}
+
         base_cmd = [
             sys.executable,
             "-m",
@@ -98,7 +119,24 @@ def _run_cli_twice_and_assert_two_commits(
         ]
         for prompt in (prompt_one, prompt_two):
             cmd = base_cmd + ["--prompt", prompt]
-            subprocess.run(cmd, check=True, cwd=project_root, env=env)
+            result = subprocess.run(
+                cmd,
+                check=True,
+                cwd=project_root,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            assert "output_log_dir=" in (result.stdout or "") or "output_log_dir=" in (
+                result.stderr or ""
+            ), "Expected output log directory to be logged"
+
+        # Validate the output log feature: at least one non-empty log file should exist.
+        log_files = sorted(log_dir.glob("*.log"))
+        assert log_files, "Expected cursor output log files to be created"
+        assert any(
+            p.stat().st_size > 0 for p in log_files
+        ), "Expected at least one non-empty output log"
 
     pr = None
     for candidate in repo.get_pulls(state="open"):
@@ -140,6 +178,8 @@ def test_cli_creates_pr_and_cleans_up(use_repo_name_only: bool) -> None:
     env.update(
         {
             "SUBMIT_PR_BODY": f"Automated test body {marker}",
+            **_e2e_ci_speed_env(),
+            **_e2e_change_guard_env(),
         }
     )
 
@@ -176,6 +216,8 @@ def test_cli_reuses_workspace_and_creates_two_commits() -> None:
     env.update(
         {
             "SUBMIT_PR_BODY": f"Automated test body {marker}",
+            **_e2e_ci_speed_env(),
+            **_e2e_change_guard_env(),
         }
     )
 

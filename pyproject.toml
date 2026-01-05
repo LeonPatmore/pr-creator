@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "PyGithub",
+  "pydantic-ai",
   "pydantic-graph",
   "dulwich",
   "PyYAML",
@@ -26,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "flake8", "black"]
+dev = ["pytest", "flake8", "black", "python-dotenv"]
 
 [project.scripts]
 pr-creator = "pr_creator.cli:main"

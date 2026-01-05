@@ -76,7 +76,7 @@ Repo processing behavior:
 
 ### Environment variables
 **GitHub auth (required for PR creation)**
-- `GITHUB_TOKEN` — used for push and GitHub PR creation.
+- `GITHUB_TOKEN` — GitHub token used for clone/push/PR creation (used when `--github-token` is omitted).
   - If unset, the workflow can still run, but push/PR creation is skipped.
 
 **Agent selection**
@@ -86,18 +86,32 @@ Repo processing behavior:
 - `REVIEW_AGENT` — choose review agent; default `cursor`.
 
 **Cursor agent runtime (how the change agent is executed)**
+
+Common (Docker + CLI):
 - `CURSOR_API_KEY` — passed to the cursor agent.
 - `CURSOR_RUNNER` — how to run cursor-agent; `docker` or `cli` (default: `docker`).
-- `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
-- `CURSOR_CLI_BIN` — cursor-agent binary name/path when using `CURSOR_RUNNER=cli` (default: `cursor-agent`).
-- `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent when using `CURSOR_RUNNER=cli` (default: common path of repo + context roots).
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
-- `CURSOR_STREAM_MODE` — cursor streaming mode; default `assistant`.
-- `CURSOR_STREAM_SHOW_THINKING` — enable showing thinking output; set to `1|true|yes|on` to enable.
+- `CURSOR_STREAM_SHOW_THINKING` — when streaming output is enabled, include thinking output; set to `1|true|yes|on` to enable (default: off).
+- `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR` — directory to write per-run **full raw** `cursor-agent` output logs (default: `~/.pr-creator/cursor-output-logs`).
+
+Docker runner only (`CURSOR_RUNNER=docker`):
+- `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
+
+CLI runner only (`CURSOR_RUNNER=cli`):
+- `CURSOR_CLI_BIN` — cursor-agent binary name/path (default: `cursor-agent`).
+- `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent (default: common path of repo + context roots).
+- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: no timeout.
+- `CURSOR_AGENT_HEARTBEAT_SECONDS` — emit a “still running” message when no output is seen for this many seconds (default: `30`).
+
+**Orchestration**
+- `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `gpt-5.2`.
 
 **Agent context (optional)**
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
+
+**Apply safety (optional)**
+- `CHANGE_ALLOWED_PATHS` — comma-separated glob patterns of paths the change agent is allowed to modify. If set, any changes outside this allowlist are reverted after the change agent runs (useful for strict tasks like “only edit README.md”).
 
 **Prompt sources (optional)**
 - `PROMPT_CONFIG_OWNER` — GitHub owner for prompt config loading when `--prompt-config-owner` is omitted.
@@ -123,6 +137,7 @@ Repo processing behavior:
 - `CI_WAIT_TIMEOUT_SECONDS` — max time to wait for checks per attempt (default: `1800`).
 - `CI_WAIT_POLL_SECONDS` — poll interval while waiting (default: `15`).
 - `CI_WAIT_HEARTBEAT_SECONDS` — heartbeat log interval while waiting for checks (default: `120`).
+- `CI_PENDING_NO_CHECKS_GRACE_SECONDS` — if GitHub reports `pending` but no check-runs or commit-status contexts appear, stop waiting after this many seconds (default: `60`).
 - `CI_ACCEPTABLE_CONCLUSIONS` — comma-separated conclusions treated as “passing” (default: `success,skipped,neutral`).
 - `CI_MAX_LOG_BYTES` — max bytes to download from a logs archive (default: `5000000`).
 - `CI_MAX_LOG_CHARS` — max characters of extracted logs included in the prompt (default: `30000`).
@@ -132,6 +147,9 @@ Repo processing behavior:
 - `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` — author/committer; defaults to pr-creator placeholders if unset.
 
 ### CLI arguments
+**GitHub auth**
+- `--github-token` — GitHub token used for clone/push/PR creation (overrides env `GITHUB_TOKEN`).
+
 **Prompts**
 - `--prompt` — main prompt text. Required unless using prompt config.
 - `--relevance-prompt` — relevance filter prompt. Required unless using prompt config.
@@ -172,6 +190,16 @@ Repo processing behavior:
 - Without `--change-id`, a fresh workspace with a random suffix is created and cleaned up after each repo finishes.
 - To start fresh, remove the working directory (e.g., `rm -rf .repos`).
 
+### Orchestration (default)
+By default, pr-creator runs a **per-repo orchestration step** before applying changes:
+
+- Repo discovery
+- For each repo:
+  - Workspace + relevance check
+  - **Orchestrate**: derive a repo-specific prompt (read-only analysis)
+  - Apply changes + review + submit PR + wait for CI + cleanup
+Orchestration is always enabled.
+
 ### Example (Docker)
 
 ```sh
@@ -191,6 +219,6 @@ docker run --rm \
 ### Developer
 **Commands**
 - `pipenv run python -m pr_creator.cli --prompt "<prompt>" --relevance-prompt "<relevance>" --repo <repo_url> --working-dir .repos`
-- `make test-e2e` — run the e2e pytest (requires env vars set).
+- `make test-e2e` — run the e2e pytest (requires env vars set; pytest will load repo-root `.env` if present).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).

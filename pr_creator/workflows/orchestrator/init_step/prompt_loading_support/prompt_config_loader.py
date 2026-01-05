@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any, Dict, Optional
+
+import yaml
+from github.GithubException import GithubException
+
+from pr_creator.github_client import get_github_client
+
+logger = logging.getLogger(__name__)
+
+
+def _load_yaml_from_github(
+    owner: str, repo_name: str, ref: str, path: str, token: Optional[str]
+) -> Dict[str, Any]:
+    if not token:
+        logger.warning("GitHub token not set; cannot load private GitHub config")
+        return {}
+    repo_slug = f"{owner}/{repo_name}"
+    gh = get_github_client(token)
+    if not gh:
+        return {}
+    try:
+        repo = gh.get_repo(repo_slug)
+        content_file = repo.get_contents(path, ref=ref)
+        return yaml.safe_load(content_file.decoded_content) or {}
+    except GithubException as exc:
+        logger.warning("Failed to fetch config via GitHub API: %s", exc)
+        return {}
+
+
+def load_prompts_from_config(
+    owner: Optional[str], repo: str, ref: str, path: str, token: Optional[str]
+) -> Dict[str, str]:
+    """
+    Load change/relevance prompts from a YAML config in GitHub.
+    Requires owner/repo/ref/path and uses the GitHub API (works with private repos).
+    """
+    resolved_owner = owner or os.environ.get("PROMPT_CONFIG_OWNER")
+    if not resolved_owner:
+        raise ValueError(
+            "Prompt config owner is required (provide --prompt-config-owner or set PROMPT_CONFIG_OWNER)"
+        )
+
+    data: Dict[str, Any] = _load_yaml_from_github(
+        resolved_owner, repo, ref, path, token
+    )
+    change_prompt = data.get("change_prompt") or data.get("prompt")
+    relevance_prompt = data.get("relevance_prompt")
+    change_id = data.get("change_id")
+    if not change_prompt or not relevance_prompt:
+        raise ValueError(
+            "Prompt config YAML must include change_prompt and relevance_prompt"
+        )
+    logger.info(
+        "Loaded prompt config from %s/%s@%s:%s (change_prompt len=%s, relevance_prompt len=%s%s)",
+        resolved_owner,
+        repo,
+        ref,
+        path,
+        len(str(change_prompt)),
+        len(str(relevance_prompt)),
+        f", change_id={change_id}" if change_id else "",
+    )
+    result = {"prompt": str(change_prompt), "relevance_prompt": str(relevance_prompt)}
+    if change_id:
+        result["change_id"] = str(change_id)
+    return result
