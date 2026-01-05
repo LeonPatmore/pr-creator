@@ -19,7 +19,8 @@ class OrchestratorState:
     prompt: str
     relevance_prompt: str
     repos: List[str]
-    working_dir: Path
+    # Where repos are cloned/worked on. If None, init step will set the default.
+    working_dir: Optional[Path] = None
     # GitHub auth token (CLI flag wins; otherwise init step falls back to env GITHUB_TOKEN).
     github_token: Optional[str] = None
 
@@ -41,7 +42,8 @@ class OrchestratorState:
     change_agent_secret_env_keys: List[str] = field(default_factory=list)
 
     datadog_team: Optional[str] = None
-    datadog_site: str = "datadoghq.com"
+    # If None, init step will set the default.
+    datadog_site: Optional[str] = None
 
     # Stable branch naming / rollout id (propagated to repo-change workflow)
     change_id: Optional[str] = None

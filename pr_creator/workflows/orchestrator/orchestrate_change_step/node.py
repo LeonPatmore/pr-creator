@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 async def _repo_change_tool(
     ctx: GraphRunContext, *, repo_url: str, prompt: str
 ) -> list[dict[str, str]]:
+    assert ctx.state.working_dir is not None
     repo_state = RepoChangeState(
         prompt=prompt,
         working_dir=Path(ctx.state.working_dir),

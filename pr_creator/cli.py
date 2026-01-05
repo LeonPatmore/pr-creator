@@ -27,8 +27,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--prompt-config-ref",
-        default="main",
-        help="Git ref (branch/sha/tag) for the prompt config file (default: main)",
+        help="Git ref (branch/sha/tag) for the prompt config file",
     )
     parser.add_argument(
         "--prompt-config-path",
@@ -41,13 +40,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--datadog-site",
-        default="https://api.datadoghq.com",
-        help="Datadog site base URL (default: https://api.datadoghq.com)",
+        help="Datadog site base URL",
     )
-    parser.add_argument("--working-dir", default=".repos")
-    parser.add_argument(
-        "--log-level", default="INFO", help="Logging level (default: INFO)"
-    )
+    parser.add_argument("--working-dir")
+    parser.add_argument("--log-level", help="Logging level")
     parser.add_argument(
         "--change-id",
         help="Change ID to use for static branch names (ensures re-runs use the same branch)",
@@ -109,7 +105,7 @@ def main() -> None:
 
     try:
         # Orchestrator owns discovery/iteration and is always enabled.
-        state = OrchestratorState(
+        state_kwargs: dict = dict(
             prompt="",
             relevance_prompt=args.relevance_prompt or "",
             cli_prompt=args.prompt,
@@ -122,15 +118,24 @@ def main() -> None:
             jira_email=args.jira_email,
             jira_api_token=args.jira_api_token,
             repos=list(args.repo or []),
-            working_dir=Path(args.working_dir),
+            working_dir=(
+                Path(args.working_dir).expanduser()
+                if (args.working_dir or "").strip()
+                else None
+            ),
             github_token=args.github_token,
             context_roots=context_roots,
             change_agent_secret_kv_pairs=list(args.secret or []),
             change_agent_secret_env_keys=list(args.secret_env or []),
             datadog_team=args.datadog_team,
-            datadog_site=args.datadog_site.replace("https://", "").replace("api.", ""),
             change_id=args.change_id,
         )
+        if (args.datadog_site or "").strip():
+            state_kwargs["datadog_site"] = args.datadog_site.replace(
+                "https://", ""
+            ).replace("api.", "")
+
+        state = OrchestratorState(**state_kwargs)
         final_state = asyncio.run(run_orchestrator_workflow(state))
     except ValueError as e:
         raise SystemExit(str(e)) from e

@@ -33,7 +33,7 @@ export GITHUB_TOKEN=...
 pr-creator \
   --prompt "Update dependency X to version Y." \
   --repo https://github.com/<owner>/<repo> \
-  --working-dir .repos
+  --working-dir ~/.pr-creator/repos
 ```
 
 Or run via Docker (see example below).
@@ -71,6 +71,7 @@ Target repos in one (or both) of these ways:
 Repo processing behavior:
 - **Dedup + normalization**: repo inputs are normalized to GitHub HTTPS URLs and deduplicated.
 - **Optional relevance filter**: if a `relevance_prompt` is present, each repo is evaluated and only relevant repos get changes applied.
+  - Relevance decisions are cached on disk at `~/.pr-creator/relevance-cache.json`, keyed by `(repo_identifier, evaluated_sha, prompt_hash)`, to avoid repeating the same checks across runs.
 - **Review before commit**: after changes are applied, the Cursor agent reviews the repo’s uncommitted state and may request a single follow-up apply pass before committing.
 - **Repeatable reruns**: set `--change-id` to use stable branch naming (`<change_id>/<slug>`) and a stable workspace path under `--working-dir` (useful for rerunning after fixes).
 
@@ -178,17 +179,17 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `--datadog-site` — Datadog API base URL; default `https://api.datadoghq.com`.
 
 **Runtime**
-- `--working-dir` — where repos are cloned; default `.repos`.
+- `--working-dir` — where repos are cloned; default `~/.pr-creator/repos`.
 - `--log-level` — logging level; default `INFO`.
 - `--context-root` — host directory to mount (read-only) into the agent workspace for extra context; can be passed multiple times (env equivalent: `AGENT_CONTEXT_ROOTS`).
 - `--secret` — forward a secret to the change agent as an env var (`KEY=VALUE`); can be passed multiple times.
 - `--secret-env` — forward an env var (by name) from the current process into the change agent; can be passed multiple times.
 
 ### Workspace management
-- Workspaces live under `--working-dir` (default `.repos`); directories are auto-created per repo.
+- Workspaces live under `--working-dir` (default `~/.pr-creator/repos`); directories are auto-created per repo.
 - When `--change-id` is set, the workspace path is deterministic (`<repo>-<change_id>`) and reused across runs so the same branch can be reapplied.
 - Without `--change-id`, a fresh workspace with a random suffix is created and cleaned up after each repo finishes.
-- To start fresh, remove the working directory (e.g., `rm -rf .repos`).
+- To start fresh, remove the working directory (e.g., `rm -rf ~/.pr-creator/repos`).
 
 ### Orchestration (default)
 By default, pr-creator runs a **per-repo orchestration step** before applying changes:
@@ -218,7 +219,7 @@ docker run --rm \
 
 ### Developer
 **Commands**
-- `pipenv run python -m pr_creator.cli --prompt "<prompt>" --relevance-prompt "<relevance>" --repo <repo_url> --working-dir .repos`
+- `pipenv run python -m pr_creator.cli --prompt "<prompt>" --relevance-prompt "<relevance>" --repo <repo_url> --working-dir ~/.pr-creator/repos`
 - `make test-e2e` — run the e2e pytest (requires env vars set; pytest will load repo-root `.env` if present).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).

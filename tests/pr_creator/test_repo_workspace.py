@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from pr_creator.repo_workspace import CloneResult, prepare_workspace  # noqa: E402
+from pr_creator.repo_workspace import CloneResult, prepare_workspace
 
 
 def test_prepare_workspace_planning_mode_returns_cloneresult_for_local_dir(

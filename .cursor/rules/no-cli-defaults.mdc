@@ -1,0 +1,11 @@
+---
+description: CLI should not contain defaults; defaults belong in workflow init/state.
+alwaysApply: false
+---
+Do not put default values in `pr_creator/cli.py` (e.g. argparse `default=...` or other implicit fallbacks).
+
+Defaults should be resolved in:
+- The orchestrator init step (e.g. `pr_creator/workflows/orchestrator/init_step/node.py`), and/or
+- The workflow state dataclasses (e.g. `pr_creator/workflows/orchestrator/state.py`)
+
+This keeps the CLI as a thin input layer and makes defaults consistent for all callers.
