@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 
@@ -35,36 +36,73 @@ def _parse_review_output(output: str) -> tuple[bool, str | None]:
             "Review output was empty; please re-run review and provide required fixes.",
         )
 
-    # Look at the first non-empty line as the "verdict".
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    first = (lines[0] if lines else "").upper()
-    logger.info(
-        "[review-agent] parsed verdict=%r (first_line=%r)",
-        first,
-        lines[0] if lines else "",
-    )
+    # Cursor sometimes violates the strict output contract (e.g. starts with
+    # "All requirements are met:"), so we parse from the end backwards and
+    # prioritize explicit verdict markers if present.
+    #
+    # This mirrors our evaluate-agent parsing strategy (_parse_decision).
+    raw_lines = [ln.strip() for ln in text.splitlines()]
+    non_empty = [ln for ln in raw_lines if ln]
 
-    if first == "READY_TO_COMMIT":
-        logger.info("[review-agent] READY_TO_COMMIT -> needs_changes=False")
-        return False, None
+    # 1) Prefer explicit markers, scanning from the end backwards.
+    for i in range(len(raw_lines) - 1, -1, -1):
+        ln = raw_lines[i]
+        if not ln:
+            continue
+        upper = ln.upper()
+        if upper == "READY_TO_COMMIT":
+            logger.info("[review-agent] parsed verdict=%r (line=%r)", upper, ln)
+            logger.info("[review-agent] READY_TO_COMMIT -> needs_changes=False")
+            return False, None
+        if upper.startswith("CHANGES_REQUIRED"):
+            feedback = "\n".join(raw_lines[i + 1 :]).strip() or None
+            logger.info(
+                "[review-agent] parsed verdict=%r (line=%r)", "CHANGES_REQUIRED", ln
+            )
+            # If CHANGES_REQUIRED but no details, still treat as needs changes.
+            logger.info(
+                "[review-agent] CHANGES_REQUIRED -> needs_changes=True (feedback_present=%s, feedback_snippet=%r)",
+                bool(feedback),
+                _snippet(feedback or ""),
+            )
+            return True, feedback or "Changes required (no details provided)."
 
-    if first.startswith("CHANGES_REQUIRED"):
-        remainder = text.splitlines()[1:]
-        feedback = "\n".join(remainder).strip() or None
-        # If CHANGES_REQUIRED but no details, still treat as needs changes.
+    # 2) No explicit markers: accept common approval phrasing as READY_TO_COMMIT.
+    #
+    # We keep this intentionally narrow to avoid false positives.
+    text_upper = text.upper()
+    approval_phrases = [
+        r"\bALL REQUIREMENTS ARE MET\b",
+        r"\bREPOSITORY IS READY TO COMMIT\b",
+        r"\bREPO IS READY TO COMMIT\b",
+        r"\bNO CHANGES REQUIRED\b",
+        r"\bNO CHANGES NEEDED\b",
+    ]
+    for pat in approval_phrases:
+        if re.search(pat, text_upper):
+            logger.info(
+                "[review-agent] parsed verdict=%r (phrase=%r)", "READY_TO_COMMIT", pat
+            )
+            return False, None
+
+    # 3) If the agent says "changes required" but didn't use the marker, treat as needing changes.
+    # This is still conservative because the unknown-format fallback will request changes anyway.
+    if re.search(r"\bCHANGES REQUIRED\b", text_upper) or re.search(
+        r"\bNEEDS CHANGES\b", text_upper
+    ):
         logger.info(
-            "[review-agent] CHANGES_REQUIRED -> needs_changes=True (feedback_present=%s, feedback_snippet=%r)",
-            bool(feedback),
-            _snippet(feedback or ""),
+            "[review-agent] parsed verdict=%r (phrase=%r)",
+            "CHANGES_REQUIRED",
+            "CHANGES REQUIRED/NEEDS CHANGES",
         )
-        return True, feedback or "Changes required (no details provided)."
+        return True, text
 
     # Unknown format: treat as needing changes, and forward raw output to ApplyChanges.
     logger.warning(
         "[review-agent] unknown output format -> needs_changes=True (output_snippet=%r)",
-        _snippet(text),
+        _snippet("\n".join(non_empty) if non_empty else text),
     )
-    return True, text
+    return True, "\n".join(non_empty) if non_empty else text
 
 
 class CursorReviewAgent(ReviewAgent):

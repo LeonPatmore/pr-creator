@@ -19,7 +19,9 @@ _TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
 
 def _stream_settings(env: dict[str, str]) -> tuple[str, bool]:
     stream_mode = (env.get("CURSOR_STREAM_MODE") or "assistant").lower().strip()
-    show_thinking = (env.get("CURSOR_STREAM_SHOW_THINKING") or "").strip().lower() in _TRUTHY
+    show_thinking = (
+        env.get("CURSOR_STREAM_SHOW_THINKING") or ""
+    ).strip().lower() in _TRUTHY
     return stream_mode, show_thinking
 
 
