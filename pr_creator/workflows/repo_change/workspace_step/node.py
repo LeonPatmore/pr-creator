@@ -33,12 +33,12 @@ class WorkspaceRepo(BaseNode):
                 self.repo_url,
             )
             ctx.state.relevant.append(self.repo_url)
-            from .apply import ApplyChanges
+            from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
 
             return ApplyChanges(repo_url=self.repo_url)
 
         # Relevance evaluation is orchestrator-owned. Repo-change runs assume the repo
         # is already selected.
-        from .apply import ApplyChanges
+        from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
 
         return ApplyChanges(repo_url=self.repo_url)

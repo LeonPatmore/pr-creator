@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.workflows.repo_change.submit_change import get_submitter
+from pr_creator.workflows.repo_change.submit_step import get_submitter
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,9 @@ class SubmitChanges(BaseNode):
         )
         if result:
             ctx.state.created_prs.append(result)
-        from .wait_for_actions import WaitForActions
+
+        from pr_creator.workflows.repo_change.wait_for_actions_step.node import (
+            WaitForActions,
+        )
 
         return WaitForActions(repo_url=self.repo_url)

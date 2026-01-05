@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.workflows.repo_change.github_actions import (
+from pr_creator.workflows.repo_change.wait_for_actions_step.github_actions import (
     load_ci_wait_config,
     wait_for_ci,
 )
@@ -52,14 +52,14 @@ class WaitForActions(BaseNode):
         pr_url = (pr_record or {}).get("pr_url")
         if not pr_url:
             logger.info("[ci] no PR url for %s; skipping wait", self.repo_url)
-            from .cleanup import CleanupRepo
+            from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)
 
         token = ctx.state.github_token
         if not token:
             logger.warning("[ci] GitHub token not set; skipping wait for %s", pr_url)
-            from .cleanup import CleanupRepo
+            from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)
 
@@ -78,7 +78,7 @@ class WaitForActions(BaseNode):
         )
         if ok:
             logger.info("[ci] %s", message)
-            from .cleanup import CleanupRepo
+            from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)
 
@@ -95,7 +95,7 @@ class WaitForActions(BaseNode):
         if attempts < max_attempts:
             ctx.state.ci_attempts[self.repo_url] = attempts + 1
             ctx.state.ci_pending[self.repo_url] = message
-            from .apply import ApplyChanges
+            from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
 
             return ApplyChanges(repo_url=self.repo_url)
 
@@ -104,6 +104,6 @@ class WaitForActions(BaseNode):
             attempts,
             max_attempts,
         )
-        from .cleanup import CleanupRepo
+        from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
         return CleanupRepo(repo_url=self.repo_url)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.workflows.repo_change.naming_agents import get_naming_agent
+from pr_creator.workflows.repo_change.naming_step.naming_agents import get_naming_agent
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,6 @@ class GenerateNames(BaseNode):
         ctx.state.pr_titles[self.repo_url] = pr_title
         ctx.state.commit_messages[self.repo_url] = commit_message
 
-        from .workspace import WorkspaceRepo
+        from pr_creator.workflows.repo_change.workspace_step.node import WorkspaceRepo
 
         return WorkspaceRepo(repo_url=self.repo_url)

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from dulwich import porcelain
 from dulwich.repo import Repo
 
-import pr_creator.workflows.repo_change.submit_change.github_submitter as github_submitter
+import pr_creator.workflows.repo_change.submit_step.github_submitter as github_submitter
 
 
 def _init_repo(repo_dir: Path) -> tuple[Repo, bytes]:
@@ -45,8 +45,6 @@ def test_submit_creates_pr_with_qualified_head(tmp_path: Path, monkeypatch) -> N
         sign=False,
     )
 
-    monkeypatch.setenv("GITHUB_TOKEN", "dummy")
-
     create_calls: list[dict] = []
 
     class DummyRepo:
@@ -81,7 +79,7 @@ def test_submit_creates_pr_with_qualified_head(tmp_path: Path, monkeypatch) -> N
     )
     monkeypatch.setattr(github_submitter, "_push_branch", lambda *args, **kwargs: None)
 
-    submitter = github_submitter.GithubSubmitter()
+    submitter = github_submitter.GithubSubmitter(github_token="dummy")
     result = submitter.submit(repo_dir, branch="feature/test")
 
     assert result and result["pr_url"] == "https://github.com/x/y/pull/1"

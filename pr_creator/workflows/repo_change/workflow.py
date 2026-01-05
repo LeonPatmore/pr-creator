@@ -4,15 +4,13 @@ from pydantic_graph import Graph
 
 from pr_creator.logging_config import ensure_logging_configured
 from pr_creator.workflows.repo_change.state import RepoChangeState
-from pr_creator.workflows.repo_change.steps import (
-    ApplyChanges,
-    CleanupRepo,
-    GenerateNames,
-    ReviewChanges,
-    SubmitChanges,
-    WaitForActions,
-    WorkspaceRepo,
-)
+from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
+from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
+from pr_creator.workflows.repo_change.naming_step.node import GenerateNames
+from pr_creator.workflows.repo_change.review_step.node import ReviewChanges
+from pr_creator.workflows.repo_change.submit_step.node import SubmitChanges
+from pr_creator.workflows.repo_change.wait_for_actions_step.node import WaitForActions
+from pr_creator.workflows.repo_change.workspace_step.node import WorkspaceRepo
 
 logger = logging.getLogger(__name__)
 

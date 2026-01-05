@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 
+from pr_creator.cursor_utils.runners import get_cursor_runner
+
 from .base import ReviewAgent
 from .config import DEFAULT_REVIEW_MAX_ATTEMPTS, get_review_max_attempts
 from .cursor_agent import CursorReviewAgent
-from pr_creator.cursor_utils.runners import get_cursor_runner
 
 DEFAULT_AGENT = "cursor"
 

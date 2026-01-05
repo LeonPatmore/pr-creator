@@ -431,7 +431,10 @@ def wait_for_ci(
         pending = _has_pending(check_runs, combined_state, statuses)
         failed = _failed_check_runs(check_runs, cfg.acceptable_conclusions)
         last_state = combined_state
-        last_counts = f"checks={len(check_runs)} statuses={len(statuses)} failed={len(failed)} state={combined_state}"
+        last_counts = (
+            f"checks={len(check_runs)} statuses={len(statuses)} failed={len(failed)} "
+            f"state={combined_state}"
+        )
 
         # If GitHub claims "pending" but there are no check-runs and no status
         # contexts, we likely have a repo with no CI configured (or a transient

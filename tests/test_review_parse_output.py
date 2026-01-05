@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pr_creator.workflows.repo_change.review_agents.cursor_agent import (  # noqa: E402
+from pr_creator.workflows.repo_change.review_step.cursor_agent import (  # noqa: E402
     _parse_review_output,
 )
 

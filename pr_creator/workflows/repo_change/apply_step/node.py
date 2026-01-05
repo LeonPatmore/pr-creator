@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
-from pydantic_graph import BaseNode, End, GraphRunContext
-
-from pr_creator.workflows.repo_change.change_agents import get_change_agent
 from dulwich import porcelain
 from dulwich.repo import Repo
+from pydantic_graph import BaseNode, End, GraphRunContext
+
+from pr_creator.workflows.repo_change.apply_step.change_agents import get_change_agent
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +188,7 @@ class ApplyChanges(BaseNode):
         )
         _post_apply_guardrails(Path(path))
         ctx.state.processed.append(self.repo_url)
-        from .review import ReviewChanges
+
+        from pr_creator.workflows.repo_change.review_step.node import ReviewChanges
 
         return ReviewChanges(repo_url=self.repo_url)

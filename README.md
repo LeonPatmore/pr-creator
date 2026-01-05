@@ -221,6 +221,6 @@ docker run --rm \
 ### Developer
 **Commands**
 - `pipenv run python -m pr_creator.cli --prompt "<prompt>" --relevance-prompt "<relevance>" --repo <repo_url> --working-dir .repos`
-- `make test-e2e` — run the e2e pytest (requires env vars set).
+- `make test-e2e` — run the e2e pytest (requires env vars set; pytest will load repo-root `.env` if present).
 - `make lint` — flake8.
 - `make format` — black (requires Python ≥3.12.6).

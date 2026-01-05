@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from abc import ABC, abstractmethod
 
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
-from .base import NamingAgent
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_AGENT = "cursor"
+
+
+class NamingAgent(ABC):
+    @abstractmethod
+    def generate_short_desc(self, prompt: str) -> str | None:
+        """Generate a short description from the prompt."""
+        raise NotImplementedError
 
 
 class CursorNamingAgent(NamingAgent):
@@ -37,3 +47,13 @@ class CursorNamingAgent(NamingAgent):
         except Exception as e:
             logger.warning("Name generation failed, returning None: %s", e)
             return None
+
+
+def get_naming_agent(name: str | None = None) -> NamingAgent:
+    agent_name = (name or os.environ.get("NAMING_AGENT") or DEFAULT_AGENT).lower()
+    if agent_name == "cursor":
+        return CursorNamingAgent(get_cursor_runner())
+    raise ValueError(f"Unknown naming agent: {agent_name}")
+
+
+__all__ = ["NamingAgent", "CursorNamingAgent", "get_naming_agent"]

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.workflows.repo_change.review_agents import (
+from pr_creator.workflows.repo_change.review_step.review_agents import (
     ReviewAgent,
     get_review_agent,
     get_review_max_attempts,
@@ -70,7 +70,9 @@ class ReviewChanges(BaseNode):
                     "[review] changes required; returning to apply (attempt %s)",
                     attempts + 1,
                 )
-                from .apply import ApplyChanges
+                from pr_creator.workflows.repo_change.apply_step.node import (
+                    ApplyChanges,
+                )
 
                 return ApplyChanges(repo_url=self.repo_url)
 
@@ -80,6 +82,6 @@ class ReviewChanges(BaseNode):
                 max_attempts,
             )
 
-        from .submit import SubmitChanges
+        from pr_creator.workflows.repo_change.submit_step.node import SubmitChanges
 
         return SubmitChanges(repo_url=self.repo_url)
