@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
 from subprocess import PIPE, STDOUT
+from typing import Final
 
 from pr_creator.cursor_utils.config import get_cursor_env_vars, get_cursor_model
 from pr_creator.cursor_utils.runners.base import CursorHintPaths
 from pr_creator.workspace_mounts import workspace_prompt_prefix
+
+logger = logging.getLogger(__name__)
+
+_TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
+
+
+def _stream_settings(env: dict[str, str]) -> tuple[str, bool]:
+    stream_mode = (env.get("CURSOR_STREAM_MODE") or "assistant").lower().strip()
+    show_thinking = (env.get("CURSOR_STREAM_SHOW_THINKING") or "").strip().lower() in _TRUTHY
+    return stream_mode, show_thinking
 
 
 def _base_cursor_command(
@@ -34,7 +46,12 @@ def _base_cursor_command(
 
 
 def _run_streaming_process(
-    command: list[str], *, cwd: str | None, env: dict[str, str]
+    command: list[str],
+    *,
+    cwd: str | None,
+    env: dict[str, str],
+    stream_mode: str,
+    show_thinking: bool,
 ) -> str:
     proc = subprocess.Popen(
         command,
@@ -48,13 +65,7 @@ def _run_streaming_process(
     assert proc.stdout is not None  # for type checkers
     raw_chunks: list[str] = []
     text_chunks: list[str] = []
-    stream_mode = (env.get("CURSOR_STREAM_MODE") or "assistant").lower().strip()
-    show_thinking = (env.get("CURSOR_STREAM_SHOW_THINKING") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "y",
-    )
+    stream_mode = stream_mode.lower().strip()
 
     def emit(text: str) -> None:
         text_chunks.append(text)
@@ -194,9 +205,31 @@ class CLICursorRunner:
             prompt=full_prompt,
         )
 
+        # Keep this log line for debugging runner behavior (do not change its shape).
+        stream_mode, show_thinking = _stream_settings(env_vars)
+        effective_stream_partial_output = stream_partial_output
+        logger.info(
+            "[cursor-runner] runner=cli bin=%s model=%s stream_partial_output=%s "
+            "stream_mode=%s show_thinking=%s cwd=%s workspace_root=%s prompt_len=%s",
+            self._cli_bin,
+            model,
+            effective_stream_partial_output,
+            stream_mode,
+            show_thinking,
+            repo_abs or "",
+            workspace_root,
+            len(full_prompt),
+        )
+
         # For interactive visibility, stream to stdout when requested (and still capture).
         if stream_partial_output:
-            return _run_streaming_process(command, cwd=repo_abs or None, env=env_vars)
+            return _run_streaming_process(
+                command,
+                cwd=repo_abs or None,
+                env=env_vars,
+                stream_mode=stream_mode,
+                show_thinking=show_thinking,
+            )
 
         result = subprocess.run(
             command,

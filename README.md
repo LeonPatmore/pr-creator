@@ -86,15 +86,23 @@ Repo processing behavior:
 - `REVIEW_AGENT` — choose review agent; default `cursor`.
 
 **Cursor agent runtime (how the change agent is executed)**
+
+Common (Docker + CLI):
 - `CURSOR_API_KEY` — passed to the cursor agent.
 - `CURSOR_RUNNER` — how to run cursor-agent; `docker` or `cli` (default: `docker`).
-- `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
-- `CURSOR_CLI_BIN` — cursor-agent binary name/path when using `CURSOR_RUNNER=cli` (default: `cursor-agent`).
-- `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent when using `CURSOR_RUNNER=cli` (default: common path of repo + context roots).
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_STREAM_MODE` — cursor streaming mode; default `assistant`.
-- `CURSOR_STREAM_SHOW_THINKING` — enable showing thinking output; set to `1|true|yes|on` to enable.
+- `CURSOR_STREAM_SHOW_THINKING` — enable showing thinking output; set to `1|true|yes|on` to enable. Defaults to enabled for the CLI runner; set to `0|false|no|off` to disable. (CLI runner will automatically enable streaming output when this is set.)
+
+Docker runner only (`CURSOR_RUNNER=docker`):
+- `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
+
+CLI runner only (`CURSOR_RUNNER=cli`):
+- `CURSOR_CLI_BIN` — cursor-agent binary name/path (default: `cursor-agent`).
+- `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent (default: common path of repo + context roots).
+- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: no timeout.
+- `CURSOR_AGENT_HEARTBEAT_SECONDS` — emit a “still running” message when no output is seen for this many seconds (default: `30`).
 
 **Orchestration**
 - `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `gpt-5.2`.

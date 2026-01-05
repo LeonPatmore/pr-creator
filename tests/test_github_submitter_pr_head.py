@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from dulwich import porcelain
 from dulwich.repo import Repo
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pr_creator.workflows.orchestrator.evaluate_relevance_step.evaluate_agents.cursor_agent import (
+from pr_creator.workflows.orchestrator.evaluate_relevance_step.evaluate_agents.cursor_agent import (  # noqa: E402
     _parse_decision,
 )
 

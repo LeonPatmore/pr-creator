@@ -23,6 +23,10 @@ class EvaluateRelevanceOrchestrator(BaseNode):
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         # If relevance_prompt is empty, treat all repos as relevant.
         if not ctx.state.relevance_prompt:
+            logger.info(
+                "[orchestrator] relevance skipped for %s (no relevance_prompt provided)",
+                self.repo_url,
+            )
             from pr_creator.workflows.orchestrator.orchestrate_change_step.node import (
                 OrchestrateChange,
             )
