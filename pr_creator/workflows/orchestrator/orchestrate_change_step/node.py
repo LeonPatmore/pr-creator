@@ -23,6 +23,7 @@ async def _repo_change_tool(
     repo_state = RepoChangeState(
         prompt=prompt,
         working_dir=Path(ctx.state.working_dir),
+        github_token=ctx.state.github_token,
         context_roots=list(ctx.state.context_roots or []),
         change_agent_secrets=dict(ctx.state.change_agent_secrets or {}),
         change_id=ctx.state.change_id,

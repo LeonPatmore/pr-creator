@@ -76,7 +76,7 @@ Repo processing behavior:
 
 ### Environment variables
 **GitHub auth (required for PR creation)**
-- `GITHUB_TOKEN` — used for push and GitHub PR creation.
+- `GITHUB_TOKEN` — GitHub token used for clone/push/PR creation (CLI fallback when `--github-token` is omitted).
   - If unset, the workflow can still run, but push/PR creation is skipped.
 
 **Agent selection**
@@ -94,6 +94,8 @@ Common (Docker + CLI):
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_STREAM_MODE` — cursor streaming mode; default `assistant`.
 - `CURSOR_STREAM_SHOW_THINKING` — enable showing thinking output; set to `1|true|yes|on` to enable. Defaults to enabled for the CLI runner; set to `0|false|no|off` to disable. (CLI runner will automatically enable streaming output when this is set.)
+- `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR` — if set, write a per-run **full raw** `cursor-agent` output log file to this directory (useful for debugging).
+- `PR_CREATOR_CURSOR_OUTPUT_LOG_FILE` — if set, append the **full raw** `cursor-agent` output to this exact file (overrides `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR`).
 
 Docker runner only (`CURSOR_RUNNER=docker`):
 - `CURSOR_IMAGE` — docker image for cursor agent; default `leonpatmore2/cursor-agent:latest`.
@@ -147,6 +149,9 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` — author/committer; defaults to pr-creator placeholders if unset.
 
 ### CLI arguments
+**GitHub auth**
+- `--github-token` — GitHub token used for clone/push/PR creation (overrides env `GITHUB_TOKEN`).
+
 **Prompts**
 - `--prompt` — main prompt text. Required unless using prompt config.
 - `--relevance-prompt` — relevance filter prompt. Required unless using prompt config.

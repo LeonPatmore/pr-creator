@@ -10,6 +10,13 @@ from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 logger = logging.getLogger(__name__)
 
 
+def _snippet(text: str, *, limit: int = 400) -> str:
+    s = (text or "").strip()
+    if len(s) <= limit:
+        return s
+    return s[:limit].rstrip() + "..."
+
+
 class CursorEvaluateAgent(EvaluateAgent):
     def __init__(self, runner: CursorRunner | None = None) -> None:
         self._runner = runner or get_cursor_runner()
@@ -33,7 +40,14 @@ class CursorEvaluateAgent(EvaluateAgent):
             stream_partial_output=True,
         )
 
-        logger.info("Cursor evaluate output for %s: %s", repo_path, output.strip())
+        # Note: output is already streamed to stdout by the runner when stream_partial_output=True.
+        # Logging the full output again makes it appear duplicated in console logs.
+        logger.info(
+            "Cursor evaluate output for %s: len=%s snippet=%r",
+            repo_path,
+            len(output or ""),
+            _snippet(output or ""),
+        )
         decision = _parse_decision(output)
         logger.info("Cursor evaluate decision for %s: %s", repo_path, decision)
         return decision

@@ -10,6 +10,7 @@ from typing import Final
 
 from pr_creator.cursor_utils.config import get_cursor_env_vars, get_cursor_model
 from pr_creator.cursor_utils.runners.base import CursorHintPaths
+from pr_creator.cursor_utils.runners.output_log import resolve_cursor_output_log
 from pr_creator.workspace_mounts import workspace_prompt_prefix
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,18 @@ def _run_streaming_process(
     env: dict[str, str],
     stream_mode: str,
     show_thinking: bool,
+    output_log_path: str | None,
 ) -> str:
+    output_log_fp = None
+    if output_log_path:
+        try:
+            os.makedirs(os.path.dirname(output_log_path), exist_ok=True)
+            output_log_fp = open(
+                output_log_path, "a", encoding="utf-8", errors="replace"
+            )
+        except Exception:
+            output_log_fp = None
+
     proc = subprocess.Popen(
         command,
         cwd=cwd,
@@ -68,6 +80,17 @@ def _run_streaming_process(
     raw_chunks: list[str] = []
     text_chunks: list[str] = []
     stream_mode = stream_mode.lower().strip()
+    saw_assistant_delta = False
+
+    def write_log(line: str) -> None:
+        if not output_log_fp:
+            return
+        try:
+            output_log_fp.write(line)
+            output_log_fp.flush()
+        except Exception:
+            # Best-effort; never crash the runner due to logging.
+            pass
 
     def emit(text: str) -> None:
         text_chunks.append(text)
@@ -79,9 +102,9 @@ def _run_streaming_process(
         sys.stdout.write(line)
         sys.stdout.flush()
 
-    def extract_text(event: dict) -> tuple[str | None, str | None]:
+    def extract_text(event: dict) -> tuple[str | None, str | None, str | None]:
         """
-        Return (kind, text) where kind is one of:
+        Return (kind, subtype, text) where kind is one of:
         - "thinking"
         - "assistant"
         - "other"
@@ -91,9 +114,13 @@ def _run_streaming_process(
         else:
             kind = "other"
 
+        subtype = event.get("subtype")
+        if not isinstance(subtype, str):
+            subtype = None
+
         # Common shape we see: {"type":"thinking","subtype":"delta","text":"..."}
         if "text" in event and isinstance(event["text"], str):
-            return kind, event["text"]
+            return kind, subtype, event["text"]
 
         # OpenAI-ish shape: {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"..."}]}}
         msg = event.get("message")
@@ -105,11 +132,12 @@ def _run_streaming_process(
                     if isinstance(item, dict) and isinstance(item.get("text"), str):
                         parts.append(item["text"])
                 if parts:
-                    return "assistant", "".join(parts)
+                    return "assistant", subtype, "".join(parts)
 
-        return kind, None
+        return kind, subtype, None
 
     for line in proc.stdout:
+        write_log(line)
         if stream_mode == "raw":
             emit_raw(line)
             continue
@@ -129,7 +157,7 @@ def _run_streaming_process(
             emit_raw(line)
             continue
 
-        kind, text = extract_text(event)
+        kind, subtype, text = extract_text(event)
         if kind == "thinking" and not show_thinking:
             continue
 
@@ -138,12 +166,29 @@ def _run_streaming_process(
             if kind not in ("assistant", "thinking"):
                 continue
 
+        # Avoid printing full-message events after already streaming deltas; this is a common
+        # cause of "everything prints twice" when stream-json includes both delta + final.
+        if kind == "assistant":
+            if subtype and subtype.lower() in ("delta", "chunk", "partial"):
+                saw_assistant_delta = True
+            if (
+                saw_assistant_delta
+                and "message" in event
+                and (not subtype or subtype.lower() in ("message", "final", "complete"))
+            ):
+                continue
+
         if text:
             emit(text)
     rc = proc.wait()
     output = "".join(text_chunks) if stream_mode != "raw" else "".join(raw_chunks)
     if rc != 0:
         raise subprocess.CalledProcessError(rc, command, output=output)
+    if output_log_fp:
+        try:
+            output_log_fp.close()
+        except Exception:
+            pass
     return output
 
 
@@ -223,6 +268,10 @@ class CLICursorRunner:
             len(full_prompt),
         )
 
+        output_log = resolve_cursor_output_log(runner="cli", repo_abs=repo_abs)
+        if output_log:
+            logger.info("[cursor-runner] output_log_file=%s", str(output_log.path))
+
         # For interactive visibility, stream to stdout when requested (and still capture).
         if stream_partial_output:
             return _run_streaming_process(
@@ -231,6 +280,7 @@ class CLICursorRunner:
                 env=env_vars,
                 stream_mode=stream_mode,
                 show_thinking=show_thinking,
+                output_log_path=str(output_log.path) if output_log else None,
             )
 
         result = subprocess.run(
@@ -241,4 +291,12 @@ class CLICursorRunner:
             capture_output=True,
             text=True,
         )
+        if output_log:
+            try:
+                output_log.path.parent.mkdir(parents=True, exist_ok=True)
+                output_log.path.open("a", encoding="utf-8", errors="replace").write(
+                    result.stdout or ""
+                )
+            except Exception:
+                pass
         return result.stdout

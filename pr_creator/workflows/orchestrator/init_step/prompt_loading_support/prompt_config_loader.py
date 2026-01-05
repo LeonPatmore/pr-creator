@@ -15,7 +15,7 @@ def _load_yaml_from_github(
     owner: str, repo_name: str, ref: str, path: str, token: Optional[str]
 ) -> Dict[str, Any]:
     if not token:
-        logger.warning("GITHUB_TOKEN not set; cannot load private GitHub config")
+        logger.warning("GitHub token not set; cannot load private GitHub config")
         return {}
     repo_slug = f"{owner}/{repo_name}"
     gh = Github(auth=Auth.Token(token))

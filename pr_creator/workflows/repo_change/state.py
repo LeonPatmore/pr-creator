@@ -15,6 +15,8 @@ class RepoChangeState:
 
     prompt: str
     working_dir: Path
+    # GitHub auth token loaded once by the CLI (CLI flag wins; env fallback).
+    github_token: Optional[str] = None
     context_roots: List[str] = field(default_factory=list)
     # Extra env vars (often secrets) forwarded to the change agent process/container.
     # Values should never be logged.

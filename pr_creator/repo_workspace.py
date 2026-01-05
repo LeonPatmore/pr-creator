@@ -36,10 +36,9 @@ def sanitize_change_id(change_id: str) -> str:
     return safe.strip("-_") or "change"
 
 
-def get_clone_url(repo_url: str) -> str:
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        token_url = token_auth_github_url(repo_url, token)
+def get_clone_url(repo_url: str, github_token: Optional[str]) -> str:
+    if github_token:
+        token_url = token_auth_github_url(repo_url, github_token)
         if token_url:
             return token_url
     return repo_url
@@ -369,6 +368,7 @@ def prepare_workspace(
     *,
     repo: str,
     working_dir: Path,
+    github_token: Optional[str] = None,
     # If provided, prepare a feature-branch workspace suitable for changes.
     branch_name: Optional[str] = None,
     change_id: Optional[str] = None,
@@ -407,7 +407,7 @@ def prepare_workspace(
         target = target_path_for_repo(
             repo, working_dir=working_dir, change_id=None, stable=stable
         )
-    clone_url = get_clone_url(repo)
+    clone_url = get_clone_url(repo, github_token)
 
     if target.exists() and (target / ".git").exists():
         logger.info(
@@ -446,16 +446,17 @@ def prepare_workspace(
 
     # Change mode: ensure we are on the right feature branch.
     assert branch_name is not None
-    token = os.environ.get("GITHUB_TOKEN")
-    branch_to_checkout = _get_branch_to_checkout(repo, token, branch_name, change_id)
+    branch_to_checkout = _get_branch_to_checkout(
+        repo, github_token, branch_name, change_id
+    )
     branch_exists_remotely = branch_to_checkout is not None
     if branch_to_checkout:
-        ensure_branch_from_remote(repo_obj, branch_to_checkout, repo, token)
+        ensure_branch_from_remote(repo_obj, branch_to_checkout, repo, github_token)
         return CloneResult(
             path=target, branch=branch_to_checkout, branch_exists_remotely=True
         )
 
-    create_branch_from_default(repo_obj, branch_name, repo, token)
+    create_branch_from_default(repo_obj, branch_name, repo, github_token)
     return CloneResult(
         path=target, branch=branch_name, branch_exists_remotely=branch_exists_remotely
     )

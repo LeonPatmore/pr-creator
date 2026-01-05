@@ -56,9 +56,9 @@ class WaitForActions(BaseNode):
 
             return CleanupRepo(repo_url=self.repo_url)
 
-        token = os.environ.get("GITHUB_TOKEN")
+        token = ctx.state.github_token
         if not token:
-            logger.warning("[ci] GITHUB_TOKEN not set; skipping wait for %s", pr_url)
+            logger.warning("[ci] GitHub token not set; skipping wait for %s", pr_url)
             from .cleanup import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)

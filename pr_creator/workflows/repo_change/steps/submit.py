@@ -9,8 +9,6 @@ from pr_creator.workflows.repo_change.submit_change import get_submitter
 
 logger = logging.getLogger(__name__)
 
-_submitter = get_submitter()
-
 
 @dataclass
 class SubmitChanges(BaseNode):
@@ -19,7 +17,9 @@ class SubmitChanges(BaseNode):
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned[self.repo_url]
         logger.info("Submitting changes for %s at %s", self.repo_url, path)
-        result = _submitter.submit(
+        # Resolve submitter at runtime; token is loaded once at CLI and threaded via state.
+        submitter = get_submitter(github_token=ctx.state.github_token)
+        result = submitter.submit(
             path,
             change_prompt=ctx.state.prompt,
             change_id=ctx.state.change_id,

@@ -11,6 +11,7 @@ from pr_creator.cursor_utils.config import (
     get_cursor_model,
 )
 from pr_creator.cursor_utils.runners.base import CursorHintPaths
+from pr_creator.cursor_utils.runners.output_log import resolve_cursor_output_log
 from pr_creator.workspace_mounts import (
     CONTEXT_DIR,
     REPO_DIR,
@@ -115,8 +116,20 @@ class DockerCursorRunner:
             environment=env_vars,
             remove=remove,
         )
-        return (
+        output = (
             output_bytes.decode("utf-8")
             if isinstance(output_bytes, bytes)
             else str(output_bytes)
         )
+        output_log = resolve_cursor_output_log(runner="docker", repo_abs=repo_abs)
+        if output_log:
+            logger.info("[cursor-runner] output_log_file=%s", str(output_log.path))
+            try:
+                output_log.path.parent.mkdir(parents=True, exist_ok=True)
+                with open(
+                    str(output_log.path), "a", encoding="utf-8", errors="replace"
+                ) as fp:
+                    fp.write(output or "")
+            except Exception:
+                pass
+        return output

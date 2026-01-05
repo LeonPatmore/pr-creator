@@ -38,6 +38,7 @@ class EvaluateRelevanceOrchestrator(BaseNode):
         repo_clone = prepare_workspace(
             repo=self.repo_url,
             working_dir=planning_dir,
+            github_token=ctx.state.github_token,
             branch_name=None,
             stable=True,
             readonly=True,

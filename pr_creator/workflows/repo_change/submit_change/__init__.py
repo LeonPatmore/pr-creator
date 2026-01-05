@@ -8,12 +8,14 @@ from .github_submitter import GithubSubmitter
 DEFAULT_SUBMITTER = "github"
 
 
-def get_submitter(name: str | None = None) -> SubmitChange:
+def get_submitter(
+    name: str | None = None, *, github_token: str | None = None
+) -> SubmitChange:
     submitter_name = (
         name or os.environ.get("SUBMIT_CHANGE") or DEFAULT_SUBMITTER
     ).lower()
     if submitter_name == "github":
-        return GithubSubmitter()
+        return GithubSubmitter(github_token=github_token)
     raise ValueError(f"Unknown submitter: {submitter_name}")
 
 

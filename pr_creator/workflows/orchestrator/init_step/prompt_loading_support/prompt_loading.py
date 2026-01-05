@@ -26,6 +26,7 @@ class _SupportsPromptLoading(Protocol):
     prompt: str
     relevance_prompt: str
     cli_prompt: str | None
+    github_token: str | None
 
     prompt_config_owner: str | None
     prompt_config_repo: str | None
@@ -98,7 +99,7 @@ def load_and_merge_prompts(state: _SupportsPromptLoading) -> PromptSource:
                 "When using prompt config, provide prompt_config_repo and prompt_config_path "
                 "(and prompt_config_owner or PROMPT_CONFIG_OWNER)"
             )
-        token = os.environ.get("GITHUB_TOKEN")
+        token = state.github_token
         ref = (state.prompt_config_ref or "main").strip() or "main"
         prompts = load_prompts_from_config(
             state.prompt_config_owner,

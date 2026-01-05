@@ -19,6 +19,7 @@ class WorkspaceRepo(BaseNode):
         result = prepare_workspace(
             repo=self.repo_url,
             working_dir=ctx.state.working_dir,
+            github_token=ctx.state.github_token,
             change_id=ctx.state.change_id,
             branch_name=branch_name,
         )
