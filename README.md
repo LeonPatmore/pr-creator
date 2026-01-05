@@ -76,7 +76,7 @@ Repo processing behavior:
 
 ### Environment variables
 **GitHub auth (required for PR creation)**
-- `GITHUB_TOKEN` — GitHub token used for clone/push/PR creation (CLI fallback when `--github-token` is omitted).
+- `GITHUB_TOKEN` — GitHub token used for clone/push/PR creation (used when `--github-token` is omitted).
   - If unset, the workflow can still run, but push/PR creation is skipped.
 
 **Agent selection**

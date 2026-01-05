@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import json
-import os
 from pathlib import Path
 
 from .logging_config import configure_logging
@@ -10,7 +9,7 @@ from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
 from pr_creator.context_roots import normalize_context_roots
 
 
-def parse_args_legacy() -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", required=False)
     parser.add_argument(
@@ -103,11 +102,10 @@ def parse_args_legacy() -> argparse.Namespace:
 
 
 def main() -> None:
-    args = parse_args_legacy()
+    args = parse_args()
     configure_logging(args.log_level, force=True)
 
     context_roots = normalize_context_roots(list(args.context_root or []))
-    github_token = args.github_token or os.environ.get("GITHUB_TOKEN")
 
     try:
         # Orchestrator owns discovery/iteration and is always enabled.
@@ -125,7 +123,7 @@ def main() -> None:
             jira_api_token=args.jira_api_token,
             repos=list(args.repo or []),
             working_dir=Path(args.working_dir),
-            github_token=github_token,
+            github_token=args.github_token,
             context_roots=context_roots,
             change_agent_secret_kv_pairs=list(args.secret or []),
             change_agent_secret_env_keys=list(args.secret_env or []),

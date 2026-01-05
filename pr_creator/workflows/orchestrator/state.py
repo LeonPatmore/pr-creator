@@ -20,7 +20,7 @@ class OrchestratorState:
     relevance_prompt: str
     repos: List[str]
     working_dir: Path
-    # GitHub auth token loaded once by the CLI (CLI flag wins; env fallback).
+    # GitHub auth token (CLI flag wins; otherwise init step falls back to env GITHUB_TOKEN).
     github_token: Optional[str] = None
 
     cli_prompt: Optional[str] = None
