@@ -193,7 +193,7 @@ class CLICursorRunner:
     ) -> str:
         # `remove` is Docker-only; keep signature for compatibility.
         _ = remove
-        model = get_cursor_model()
+        model = get_cursor_model(intent=intent)
 
         env_vars = os.environ.copy()
         env_vars.update(get_cursor_env_vars())

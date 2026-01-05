@@ -93,6 +93,7 @@ Common (Docker + CLI):
 - `CURSOR_RUNNER` — how to run cursor-agent; `docker` or `cli` (default: `docker`).
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
+- `CURSOR_MODEL_<INTENT>` — override model for a specific Cursor usage intent (e.g. `CURSOR_MODEL_CHANGE` to use a different model just for the change/apply agent). If unset, falls back to `CURSOR_MODEL`.
 - `CURSOR_STREAM_SHOW_THINKING` — when streaming output is enabled, include thinking output; set to `1|true|yes|on` to enable (default: off).
 - `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR` — directory to write per-run **full raw** `cursor-agent` output logs (default: `~/.pr-creator/cursor-output-logs`).
 

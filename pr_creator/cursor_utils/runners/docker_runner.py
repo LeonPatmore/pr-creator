@@ -85,7 +85,7 @@ class DockerCursorRunner:
         full_prompt = f"{prefix}{prompt}"
 
         image = get_cursor_image()
-        model = get_cursor_model()
+        model = get_cursor_model(intent=intent)
         env_vars = get_cursor_env_vars()
         if extra_env:
             env_vars = {**env_vars, **extra_env}

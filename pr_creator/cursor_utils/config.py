@@ -9,8 +9,26 @@ def get_cursor_image() -> str:
     return os.environ.get("CURSOR_IMAGE", "leonpatmore2/cursor-agent:latest")
 
 
-def get_cursor_model() -> str:
-    """Get the Cursor model from environment, with default."""
+def _normalize_intent(intent: str) -> str:
+    # Environment variable suffixes should be stable + predictable.
+    # Keep only a conservative subset of characters.
+    return "".join([c for c in intent.strip().upper() if c.isalnum() or c == "_"])
+
+
+def get_cursor_model(intent: str | None = None) -> str:
+    """
+    Get the Cursor model from environment, with default.
+
+    Supports intent-specific overrides:
+    - CURSOR_MODEL (default for all intents)
+    - CURSOR_MODEL_<INTENT> (override for a specific intent, e.g. CURSOR_MODEL_CHANGE)
+    """
+    if intent and intent.strip():
+        suffix = _normalize_intent(intent)
+        if suffix:
+            v = os.environ.get(f"CURSOR_MODEL_{suffix}")
+            if (v or "").strip():
+                return v
     return os.environ.get("CURSOR_MODEL", "gpt-5.2")
 
 

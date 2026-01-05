@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from abc import ABC, abstractmethod
 
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
@@ -10,6 +11,24 @@ from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 logger = logging.getLogger(__name__)
 
 DEFAULT_AGENT = "cursor"
+
+
+def _strip_markdown_code_fences(text: str) -> str:
+    """
+    Strip markdown code fences (```json ... ```) from LLM output before parsing JSON.
+
+    Handles:
+    - ```json\n{...}\n```
+    - ```\n{...}\n```
+    - Just returns the content between fences if present, otherwise returns original text.
+    """
+    stripped = text.strip()
+    # Match optional language tag after opening fence
+    pattern = r"^```(?:json|jsonc)?\s*\n(.*?)\n```$"
+    match = re.match(pattern, stripped, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return stripped
 
 
 class NamingAgent(ABC):
@@ -43,7 +62,9 @@ class CursorNamingAgent(NamingAgent):
                 stream_partial_output=False,
             )
             logger.info("Name generation output: %s", output.strip())
-            data = json.loads(output)
+            # Strip markdown code fences if present (LLM sometimes adds ```json ... ```)
+            cleaned_output = _strip_markdown_code_fences(output)
+            data = json.loads(cleaned_output)
             return data.get("short_desc") or None
         except Exception as e:
             logger.warning("Name generation failed, returning None: %s", e)
