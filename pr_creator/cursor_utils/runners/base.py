@@ -35,6 +35,7 @@ class CursorRunner(Protocol):
         self,
         prompt: str,
         *,
+        intent: str | None = None,
         repo_abs: str | None,
         context_roots: list[str],
         include_repo_hint: bool,

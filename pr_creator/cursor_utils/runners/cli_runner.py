@@ -56,6 +56,7 @@ def _run_streaming_process(
     assert proc.stdout is not None  # for type checkers
     text_chunks: list[str] = []
     saw_assistant_delta = False
+    saw_stream_json = False
 
     def write_log(line: str) -> None:
         if not output_log_fp:
@@ -118,14 +119,21 @@ def _run_streaming_process(
         try:
             event = json.loads(stripped)
         except Exception:
-            # Not JSON: print as-is.
-            emit_raw(line)
+            # Not JSON: cursor-agent sometimes emits both stream-json events AND
+            # human-readable plain text. If we already detected stream-json, suppress
+            # subsequent non-JSON lines to avoid duplicating output in the console.
+            #
+            # We still write all lines to the output log file (see write_log above).
+            if not saw_stream_json:
+                emit_raw(line)
             continue
 
         if not isinstance(event, dict):
-            emit_raw(line)
+            if not saw_stream_json:
+                emit_raw(line)
             continue
 
+        saw_stream_json = True
         kind, subtype, text = extract_text(event)
         if kind not in ("assistant", "thinking"):
             continue
@@ -175,6 +183,7 @@ class CLICursorRunner:
         self,
         prompt: str,
         *,
+        intent: str | None = None,
         repo_abs: str | None,
         context_roots: list[str],
         include_repo_hint: bool,
@@ -232,7 +241,9 @@ class CLICursorRunner:
             len(full_prompt),
         )
 
-        output_log = resolve_cursor_output_log(runner="cli", repo_abs=repo_abs)
+        output_log = resolve_cursor_output_log(
+            runner="cli", intent=intent, repo_abs=repo_abs
+        )
 
         # For interactive visibility, stream to stdout when requested (and still capture).
         if stream_partial_output:

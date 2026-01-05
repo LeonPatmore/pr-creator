@@ -152,6 +152,7 @@ class CursorReviewAgent(ReviewAgent):
 
         output = self._runner.run_prompt(
             prompt,
+            intent="review",
             repo_abs=repo_abs,
             context_roots=context_roots,
             include_repo_hint=True,

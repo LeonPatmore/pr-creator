@@ -14,7 +14,8 @@ def _snippet(text: str, *, limit: int = 400) -> str:
     s = (text or "").strip()
     if len(s) <= limit:
         return s
-    return s[:limit].rstrip() + "..."
+    # Prefer tail: the final verdict/error details typically appear at the end.
+    return "..." + s[-limit:].lstrip()
 
 
 class CursorEvaluateAgent(EvaluateAgent):
@@ -33,6 +34,7 @@ class CursorEvaluateAgent(EvaluateAgent):
 
         output = self._runner.run_prompt(
             prompt,
+            intent="evaluate",
             repo_abs=repo_abs,
             context_roots=[],
             include_repo_hint=True,

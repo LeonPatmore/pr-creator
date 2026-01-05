@@ -68,6 +68,7 @@ class DockerCursorRunner:
         self,
         prompt: str,
         *,
+        intent: str | None = None,
         repo_abs: str | None,
         context_roots: list[str],
         include_repo_hint: bool,
@@ -108,7 +109,9 @@ class DockerCursorRunner:
             workdir,
         )
 
-        output_log = resolve_cursor_output_log(runner="docker", repo_abs=repo_abs)
+        output_log = resolve_cursor_output_log(
+            runner="docker", intent=intent, repo_abs=repo_abs
+        )
 
         output_bytes = self._client.containers.run(
             image,

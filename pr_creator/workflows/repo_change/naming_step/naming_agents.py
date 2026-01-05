@@ -34,6 +34,7 @@ class CursorNamingAgent(NamingAgent):
         try:
             output = self._runner.run_prompt(
                 full_prompt,
+                intent="naming",
                 repo_abs=None,
                 context_roots=[],
                 include_repo_hint=False,

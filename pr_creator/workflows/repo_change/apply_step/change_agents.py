@@ -45,6 +45,7 @@ class CursorChangeAgent(ChangeAgent):
         )
         self._runner.run_prompt(
             guarded_prompt,
+            intent="change",
             remove=False,
             repo_abs=repo_abs,
             context_roots=context_roots,
