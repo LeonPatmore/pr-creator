@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -180,6 +181,43 @@ def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
         errstream=null_stream,
         outstream=null_stream,
     )
+
+
+def _qualified_head(remote_repo: Repository, branch: str) -> str:
+    # GitHub's API accepts both "branch" (same-repo) and "owner:branch". Using the qualified
+    # form is more robust and matches our PR lookup logic.
+    return f"{remote_repo.owner.login}:{branch}"
+
+
+def _wait_for_remote_branch(
+    remote_repo: Repository,
+    branch: str,
+    *,
+    attempts: int = 6,
+    initial_sleep_seconds: float = 0.5,
+) -> None:
+    """
+    Ensure the pushed branch ref is visible to the GitHub API before creating a PR.
+
+    We sometimes see eventual-consistency where the push succeeds but the subsequent PR creation
+    returns 422 (invalid head) because the ref is not yet queryable.
+    """
+    sleep_s = initial_sleep_seconds
+    last_exc: Exception | None = None
+    for _ in range(max(1, attempts)):
+        try:
+            remote_repo.get_git_ref(f"heads/{branch}")
+            return
+        except GithubException as exc:
+            last_exc = exc
+            # 404 = ref not visible yet
+            if exc.status != 404:
+                raise
+        time.sleep(sleep_s)
+        sleep_s = min(sleep_s * 2, 5.0)
+    raise RuntimeError(
+        f"Remote branch not visible after push: {remote_repo.full_name} refs/heads/{branch}"
+    ) from last_exc
 
 
 def _build_pr_body(base_body: str, change_prompt: Optional[str]) -> str:
@@ -363,13 +401,13 @@ class GithubSubmitter(SubmitChange):
                     existing["pushed_sha"] = pushed_sha
                 return existing
 
-            logger.info(
-                "[submit] creating PR head=%s base=%s", current_branch, base_branch
-            )
+            _wait_for_remote_branch(remote_repo, current_branch)
+            head_ref = _qualified_head(remote_repo, current_branch)
+            logger.info("[submit] creating PR head=%s base=%s", head_ref, base_branch)
             pr = remote_repo.create_pull(
                 title=pr_title_final,
                 body=pr_body,
-                head=current_branch,
+                head=head_ref,
                 base=base_branch,
             )
             result = {
@@ -427,12 +465,14 @@ class GithubSubmitter(SubmitChange):
             return existing
 
         # Create new PR
-        logger.info("[submit] creating PR head=%s base=%s", current_branch, base_branch)
+        _wait_for_remote_branch(remote_repo, current_branch)
+        head_ref = _qualified_head(remote_repo, current_branch)
+        logger.info("[submit] creating PR head=%s base=%s", head_ref, base_branch)
         try:
             pr = remote_repo.create_pull(
                 title=pr_title_final,
                 body=pr_body,
-                head=current_branch,
+                head=head_ref,
                 base=base_branch,
             )
         except GithubException as exc:

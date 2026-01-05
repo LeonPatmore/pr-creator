@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 
 from .base import EvaluateAgent
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
@@ -45,11 +46,23 @@ def _parse_decision(output: str) -> bool:
     """
     output_lower = output.lower()
 
-    # First, check for bold markers (common format for final answers)
-    if "**yes**" in output_lower or "**y**" in output_lower:
-        return True
-    if "**no**" in output_lower or "**n**" in output_lower:
-        return False
+    # Prefer the last bold marker in the response.
+    #
+    # Why: cursor-agent output can include echoed prompt text (which contains "**yes** or **no**")
+    # and the model sometimes emits the marker without a newline (e.g. "**no**This repo...").
+    #
+    # So we scan from the end and pick the first bold marker we see.
+    bold_pat = re.compile(r"\*\*(yes|no|y|n)\*\*")
+    lines = [line.strip() for line in output_lower.splitlines() if line.strip()]
+    for line in reversed(lines):
+        matches = list(bold_pat.finditer(line))
+        if not matches:
+            continue
+        last = matches[-1].group(1)
+        if last in {"yes", "y"}:
+            return True
+        if last in {"no", "n"}:
+            return False
 
     # Parse from the end backwards to find the final answer
     # This handles cases where "yes" or "no" appear in the middle of reasoning
