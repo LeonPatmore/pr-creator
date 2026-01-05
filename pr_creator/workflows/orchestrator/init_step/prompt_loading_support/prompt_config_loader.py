@@ -5,8 +5,9 @@ import os
 from typing import Any, Dict, Optional
 
 import yaml
-from github import Auth, Github
 from github.GithubException import GithubException
+
+from pr_creator.github_client import get_github_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ def _load_yaml_from_github(
         logger.warning("GitHub token not set; cannot load private GitHub config")
         return {}
     repo_slug = f"{owner}/{repo_name}"
-    gh = Github(auth=Auth.Token(token))
+    gh = get_github_client(token)
+    if not gh:
+        return {}
     try:
         repo = gh.get_repo(repo_slug)
         content_file = repo.get_contents(path, ref=ref)

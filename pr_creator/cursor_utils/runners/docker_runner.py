@@ -11,7 +11,11 @@ from pr_creator.cursor_utils.config import (
     get_cursor_model,
 )
 from pr_creator.cursor_utils.runners.base import CursorHintPaths
-from pr_creator.cursor_utils.runners.output_log import resolve_cursor_output_log
+from pr_creator.cursor_utils.runners.command import build_cursor_agent_command
+from pr_creator.cursor_utils.runners.output_log import (
+    append_output_log,
+    resolve_cursor_output_log,
+)
 from pr_creator.workspace_mounts import (
     CONTEXT_DIR,
     REPO_DIR,
@@ -48,6 +52,9 @@ def _build_workspace_volumes(
 
 
 class DockerCursorRunner:
+    def __init__(self, *, docker_client: Any | None = None) -> None:
+        self._client = docker_client or docker.from_env()
+
     def hint_paths(
         self, *, repo_abs: str | None, context_roots: list[str]
     ) -> CursorHintPaths:
@@ -85,20 +92,13 @@ class DockerCursorRunner:
         volumes = _build_workspace_volumes(repo_abs, context_roots=context_roots)
         workdir = REPO_DIR if repo_abs else WORKSPACE_ROOT
 
-        client = docker.from_env()
-        command = [
-            "cursor-agent",
-            "--workspace",
-            WORKSPACE_ROOT,
-            "--model",
-            model,
-            "--force",
-        ]
-        if stream_partial_output:
-            command.extend(
-                ["--output-format", "stream-json", "--stream-partial-output"]
-            )
-        command.extend(["--print", full_prompt])
+        command = build_cursor_agent_command(
+            cli_bin="cursor-agent",
+            workspace_root=WORKSPACE_ROOT,
+            model=model,
+            prompt=full_prompt,
+            stream_partial_output=stream_partial_output,
+        )
 
         logger.info(
             "[cursor-runner] runner=docker image=%s model=%s stream_partial_output=%s workdir=%s",
@@ -108,7 +108,9 @@ class DockerCursorRunner:
             workdir,
         )
 
-        output_bytes = client.containers.run(
+        output_log = resolve_cursor_output_log(runner="docker", repo_abs=repo_abs)
+
+        output_bytes = self._client.containers.run(
             image,
             command=command,
             volumes=volumes or {},
@@ -121,15 +123,5 @@ class DockerCursorRunner:
             if isinstance(output_bytes, bytes)
             else str(output_bytes)
         )
-        output_log = resolve_cursor_output_log(runner="docker", repo_abs=repo_abs)
-        if output_log:
-            logger.info("[cursor-runner] output_log_file=%s", str(output_log.path))
-            try:
-                output_log.path.parent.mkdir(parents=True, exist_ok=True)
-                with open(
-                    str(output_log.path), "a", encoding="utf-8", errors="replace"
-                ) as fp:
-                    fp.write(output or "")
-            except Exception:
-                pass
+        append_output_log(output_log, output or "")
         return output

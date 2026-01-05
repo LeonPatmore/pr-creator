@@ -10,7 +10,11 @@ from typing import Final
 
 from pr_creator.cursor_utils.config import get_cursor_env_vars, get_cursor_model
 from pr_creator.cursor_utils.runners.base import CursorHintPaths
-from pr_creator.cursor_utils.runners.output_log import resolve_cursor_output_log
+from pr_creator.cursor_utils.runners.command import build_cursor_agent_command
+from pr_creator.cursor_utils.runners.output_log import (
+    append_output_log,
+    resolve_cursor_output_log,
+)
 from pr_creator.workspace_mounts import workspace_prompt_prefix
 
 logger = logging.getLogger(__name__)
@@ -18,34 +22,8 @@ logger = logging.getLogger(__name__)
 _TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
 
 
-def _stream_settings(env: dict[str, str]) -> tuple[str, bool]:
-    stream_mode = (env.get("CURSOR_STREAM_MODE") or "assistant").lower().strip()
-    show_thinking = (
-        env.get("CURSOR_STREAM_SHOW_THINKING") or ""
-    ).strip().lower() in _TRUTHY
-    return stream_mode, show_thinking
-
-
-def _base_cursor_command(
-    *,
-    cli_bin: str,
-    workspace_root: str,
-    model: str,
-    stream_partial_output: bool,
-    prompt: str,
-) -> list[str]:
-    cmd = [
-        cli_bin,
-        "--workspace",
-        workspace_root,
-        "--model",
-        model,
-        "--force",
-    ]
-    if stream_partial_output:
-        cmd.extend(["--output-format", "stream-json", "--stream-partial-output"])
-    cmd.extend(["--print", prompt])
-    return cmd
+def _show_thinking(env: dict[str, str]) -> bool:
+    return (env.get("CURSOR_STREAM_SHOW_THINKING") or "").strip().lower() in _TRUTHY
 
 
 def _run_streaming_process(
@@ -53,7 +31,6 @@ def _run_streaming_process(
     *,
     cwd: str | None,
     env: dict[str, str],
-    stream_mode: str,
     show_thinking: bool,
     output_log_path: str | None,
 ) -> str:
@@ -77,9 +54,7 @@ def _run_streaming_process(
         bufsize=1,
     )
     assert proc.stdout is not None  # for type checkers
-    raw_chunks: list[str] = []
     text_chunks: list[str] = []
-    stream_mode = stream_mode.lower().strip()
     saw_assistant_delta = False
 
     def write_log(line: str) -> None:
@@ -89,8 +64,7 @@ def _run_streaming_process(
             output_log_fp.write(line)
             output_log_fp.flush()
         except Exception:
-            # Best-effort; never crash the runner due to logging.
-            pass
+            return
 
     def emit(text: str) -> None:
         text_chunks.append(text)
@@ -98,7 +72,6 @@ def _run_streaming_process(
         sys.stdout.flush()
 
     def emit_raw(line: str) -> None:
-        raw_chunks.append(line)
         sys.stdout.write(line)
         sys.stdout.flush()
 
@@ -138,10 +111,6 @@ def _run_streaming_process(
 
     for line in proc.stdout:
         write_log(line)
-        if stream_mode == "raw":
-            emit_raw(line)
-            continue
-
         # Best-effort: parse stream-json and print a human-friendly subset.
         stripped = line.strip()
         if not stripped:
@@ -158,13 +127,10 @@ def _run_streaming_process(
             continue
 
         kind, subtype, text = extract_text(event)
+        if kind not in ("assistant", "thinking"):
+            continue
         if kind == "thinking" and not show_thinking:
             continue
-
-        if stream_mode == "assistant":
-            # Only show assistant-ish text (and optionally thinking).
-            if kind not in ("assistant", "thinking"):
-                continue
 
         # Avoid printing full-message events after already streaming deltas; this is a common
         # cause of "everything prints twice" when stream-json includes both delta + final.
@@ -181,14 +147,11 @@ def _run_streaming_process(
         if text:
             emit(text)
     rc = proc.wait()
-    output = "".join(text_chunks) if stream_mode != "raw" else "".join(raw_chunks)
+    output = "".join(text_chunks)
     if rc != 0:
         raise subprocess.CalledProcessError(rc, command, output=output)
     if output_log_fp:
-        try:
-            output_log_fp.close()
-        except Exception:
-            pass
+        output_log_fp.close()
     return output
 
 
@@ -244,7 +207,7 @@ class CLICursorRunner:
             except Exception:
                 workspace_root = repo_abs or os.getcwd()
 
-        command = _base_cursor_command(
+        command = build_cursor_agent_command(
             cli_bin=self._cli_bin,
             workspace_root=workspace_root,
             model=model,
@@ -253,7 +216,8 @@ class CLICursorRunner:
         )
 
         # Keep this log line for debugging runner behavior (do not change its shape).
-        stream_mode, show_thinking = _stream_settings(env_vars)
+        stream_mode = "assistant"
+        show_thinking = _show_thinking(env_vars)
         effective_stream_partial_output = stream_partial_output
         logger.info(
             "[cursor-runner] runner=cli bin=%s model=%s stream_partial_output=%s "
@@ -269,8 +233,6 @@ class CLICursorRunner:
         )
 
         output_log = resolve_cursor_output_log(runner="cli", repo_abs=repo_abs)
-        if output_log:
-            logger.info("[cursor-runner] output_log_file=%s", str(output_log.path))
 
         # For interactive visibility, stream to stdout when requested (and still capture).
         if stream_partial_output:
@@ -278,7 +240,6 @@ class CLICursorRunner:
                 command,
                 cwd=repo_abs or None,
                 env=env_vars,
-                stream_mode=stream_mode,
                 show_thinking=show_thinking,
                 output_log_path=str(output_log.path) if output_log else None,
             )
@@ -291,12 +252,5 @@ class CLICursorRunner:
             capture_output=True,
             text=True,
         )
-        if output_log:
-            try:
-                output_log.path.parent.mkdir(parents=True, exist_ok=True)
-                output_log.path.open("a", encoding="utf-8", errors="replace").write(
-                    result.stdout or ""
-                )
-            except Exception:
-                pass
+        append_output_log(output_log, result.stdout or "")
         return result.stdout

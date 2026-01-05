@@ -11,9 +11,9 @@ from typing import Dict, Optional
 
 from dulwich import porcelain
 from dulwich.repo import Repo
-from github import Auth, Github
 
 from pr_creator.git_urls import github_slug_from_url, token_auth_github_url
+from pr_creator.github_client import get_github_client
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +162,8 @@ def _is_ancestor(repo: Repo, possible_ancestor: bytes, commit_sha: bytes) -> boo
 def _get_default_branch(repo_url: str, token: Optional[str]) -> str:
     try:
         slug = github_slug_from_url(repo_url)
-        if slug and token:
-            gh = Github(auth=Auth.Token(token))
+        gh = get_github_client(token)
+        if slug and gh:
             repo = gh.get_repo(slug)
             return repo.default_branch
     except Exception:
@@ -183,7 +183,9 @@ def _find_branch_with_change_prefix(
         slug = github_slug_from_url(repo_url)
         if not slug:
             return None
-        gh = Github(auth=Auth.Token(token))
+        gh = get_github_client(token)
+        if not gh:
+            return None
         repo = gh.get_repo(slug)
         prefix = f"{change_id}/"
         first_match: Optional[str] = None
@@ -228,7 +230,9 @@ def _get_branch_to_checkout(
         slug = github_slug_from_url(repo_url)
         if not slug:
             return None
-        gh = Github(auth=Auth.Token(token))
+        gh = get_github_client(token)
+        if not gh:
+            return None
         repo = gh.get_repo(slug)
         repo.get_branch(branch_name)
         logger.info("Found existing branch %s", branch_name)

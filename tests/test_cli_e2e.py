@@ -100,6 +100,10 @@ def _run_cli_twice_and_assert_two_commits(
 
     project_root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory() as tmpdir:
+        log_dir = Path(tmpdir) / "cursor-output-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        env = {**env, "PR_CREATOR_CURSOR_OUTPUT_LOG_DIR": str(log_dir)}
+
         base_cmd = [
             sys.executable,
             "-m",
@@ -115,7 +119,24 @@ def _run_cli_twice_and_assert_two_commits(
         ]
         for prompt in (prompt_one, prompt_two):
             cmd = base_cmd + ["--prompt", prompt]
-            subprocess.run(cmd, check=True, cwd=project_root, env=env)
+            result = subprocess.run(
+                cmd,
+                check=True,
+                cwd=project_root,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            assert "output_log_dir=" in (result.stdout or "") or "output_log_dir=" in (
+                result.stderr or ""
+            ), "Expected output log directory to be logged"
+
+        # Validate the output log feature: at least one non-empty log file should exist.
+        log_files = sorted(log_dir.glob("*.log"))
+        assert log_files, "Expected cursor output log files to be created"
+        assert any(
+            p.stat().st_size > 0 for p in log_files
+        ), "Expected at least one non-empty output log"
 
     pr = None
     for candidate in repo.get_pulls(state="open"):
