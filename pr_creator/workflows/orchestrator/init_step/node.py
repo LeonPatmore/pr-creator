@@ -29,6 +29,9 @@ class InitOrchestrator(BaseNode):
         if not ctx.state.github_token:
             ctx.state.github_token = os.environ.get("GITHUB_TOKEN")
 
+        if not ctx.state.github_default_org:
+            ctx.state.github_default_org = os.environ.get("GITHUB_DEFAULT_ORG")
+
         resolve_secrets_and_context(ctx.state)
         load_and_merge_prompts(ctx.state)
 

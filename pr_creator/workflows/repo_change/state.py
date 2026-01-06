@@ -28,7 +28,12 @@ class RepoChangeState:
     relevant: List[str] = field(default_factory=list)
     processed: List[str] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)
-    created_prs: List[Dict[str, str]] = field(default_factory=list)
+    # Single PR URL for this repo-change run.
+    # SubmitChanges may execute multiple times (e.g., CI-fix loop), but it must always
+    # refer to the same PR.
+    created_pr: Optional[str] = None
+    # The most recent pushed SHA associated with the created PR (if any).
+    created_pr_pushed_sha: Optional[str] = None
     change_id: Optional[str] = None
     # Raw review output from the review step, keyed by repo_url.
     review_feedback: Dict[str, str] = field(default_factory=dict)

@@ -1,0 +1,19 @@
+---
+description: Only add comments when truly necessary.
+alwaysApply: true
+---
+
+Only add code comments when they provide essential non-obvious information.
+
+Avoid redundant comments that simply restate what the code does.
+
+Good comments explain:
+- Why a non-obvious approach was chosen
+- Complex business logic or algorithms
+- Important gotchas or edge cases
+- References to external documentation or tickets
+
+Bad comments (avoid):
+- Restating obvious operations (e.g., "# Set the value to x")
+- Describing what can be clearly understood from well-named variables/functions
+- Commenting every single line or block

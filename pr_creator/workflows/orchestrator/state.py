@@ -23,6 +23,7 @@ class OrchestratorState:
     working_dir: Optional[Path] = None
     # GitHub auth token (CLI flag wins; otherwise init step falls back to env GITHUB_TOKEN).
     github_token: Optional[str] = None
+    github_default_org: Optional[str] = None
 
     cli_prompt: Optional[str] = None
     prompt_config_owner: Optional[str] = None
@@ -48,6 +49,9 @@ class OrchestratorState:
     # Stable branch naming / rollout id (propagated to repo-change workflow)
     change_id: Optional[str] = None
 
+    # MCP servers configuration
+    mcp_config_path: Optional[Path] = None
+
     # Orchestrator outputs
     repo_prompts: Dict[str, str] = field(default_factory=dict)
     planning_clones: Dict[str, Path] = field(default_factory=dict)
@@ -55,3 +59,6 @@ class OrchestratorState:
     # Rollup outputs from repo-change runs
     created_prs: List[Dict[str, str]] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)
+
+    # Errors from orchestration (e.g., unable to determine target repo)
+    orchestrator_errors: List[str] = field(default_factory=list)

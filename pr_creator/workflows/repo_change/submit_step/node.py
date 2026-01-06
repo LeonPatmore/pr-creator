@@ -28,7 +28,22 @@ class SubmitChanges(BaseNode):
             commit_message=ctx.state.commit_messages.get(self.repo_url),
         )
         if result:
-            ctx.state.created_prs.append(result)
+            pr_url = (result or {}).get("pr_url")
+            pushed_sha = (result or {}).get("pushed_sha")
+
+            # Track pushed sha even if PR creation is skipped (e.g., missing token).
+            if pushed_sha:
+                ctx.state.created_pr_pushed_sha = pushed_sha
+
+            # Only consider "created_pr" to exist if we have a PR URL.
+            if pr_url:
+                if not ctx.state.created_pr:
+                    ctx.state.created_pr = pr_url
+                else:
+                    assert ctx.state.created_pr == pr_url, (
+                        "SubmitChanges returned different PR URL for same repo: "
+                        f"existing={ctx.state.created_pr!r} new={pr_url!r}"
+                    )
 
         from pr_creator.workflows.repo_change.wait_for_actions_step.node import (
             WaitForActions,

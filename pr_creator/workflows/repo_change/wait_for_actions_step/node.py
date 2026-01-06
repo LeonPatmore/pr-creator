@@ -21,15 +21,6 @@ def _max_ci_attempts() -> int:
         return 2
 
 
-def _last_pr_record_for_repo(
-    ctx: GraphRunContext, repo_url: str
-) -> dict[str, str] | None:
-    for pr in reversed(ctx.state.created_prs):
-        if pr.get("repo_url") == repo_url:
-            return pr
-    return None
-
-
 def _summarize_ci_message(message: str) -> str:
     """
     CI failure messages can include large logs. This produces a small summary
@@ -48,8 +39,7 @@ class WaitForActions(BaseNode):
     repo_url: str
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
-        pr_record = _last_pr_record_for_repo(ctx, self.repo_url)
-        pr_url = (pr_record or {}).get("pr_url")
+        pr_url = ctx.state.created_pr
         if not pr_url:
             logger.info("[ci] no PR url for %s; skipping wait", self.repo_url)
             from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
@@ -72,7 +62,7 @@ class WaitForActions(BaseNode):
             ",".join(cfg.acceptable_conclusions),
         )
 
-        expected_head_sha = (pr_record or {}).get("pushed_sha")
+        expected_head_sha = ctx.state.created_pr_pushed_sha
         ok, message = wait_for_ci(
             pr_url, token=token, cfg=cfg, expected_head_sha=expected_head_sha
         )

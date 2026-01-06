@@ -95,19 +95,17 @@ def load_or_clone_repo(target: Path, repo_url: str, clone_url: str) -> Repo:
             logger.info("No existing workspace at %s; will clone", target)
     logger.info("Cloning %s -> %s", repo_url, target)
     # Silence noisy clone progress output (Counting objects / Compressing objects / etc.).
-    out = io.StringIO()
     err = io.BytesIO()
-    porcelain.clone(clone_url, target, checkout=True, outstream=out, errstream=err)
+    porcelain.clone(clone_url, target, checkout=True, errstream=err)
     return Repo.discover(str(target))
 
 
 def fetch_refs(repo: Repo, clone_url: str, repo_url: str) -> Dict[bytes, bytes]:
     try:
         # Silence noisy fetch output, but keep warnings/errors in logs.
-        out = io.StringIO()
         err = io.BytesIO()
         remote_refs: Dict[bytes, bytes] = porcelain.fetch(
-            repo.path, clone_url, outstream=out, errstream=err
+            repo.path, clone_url, errstream=err
         )
 
         # dulwich returns refs, but it doesn't always populate remote-tracking refs under
@@ -423,11 +421,8 @@ def prepare_workspace(
         except Exception:
             shutil.rmtree(target, ignore_errors=True)
             # Silence noisy clone progress output.
-            out = io.StringIO()
             err = io.BytesIO()
-            porcelain.clone(
-                clone_url, str(target), checkout=True, outstream=out, errstream=err
-            )
+            porcelain.clone(clone_url, str(target), checkout=True, errstream=err)
             repo_obj = Repo.discover(str(target))
     else:
         if target.exists():
@@ -436,11 +431,8 @@ def prepare_workspace(
             "%s cloning %s -> %s", "[change]" if is_change else "[plan]", repo, target
         )
         # Silence noisy clone progress output.
-        out = io.StringIO()
         err = io.BytesIO()
-        porcelain.clone(
-            clone_url, str(target), checkout=True, outstream=out, errstream=err
-        )
+        porcelain.clone(clone_url, str(target), checkout=True, errstream=err)
         repo_obj = Repo.discover(str(target))
 
     if not is_change:
