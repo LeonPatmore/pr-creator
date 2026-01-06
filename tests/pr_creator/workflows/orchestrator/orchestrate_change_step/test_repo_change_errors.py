@@ -31,7 +31,9 @@ async def test_orchestrate_change_catches_repo_change_exception_and_returns_erro
     monkeypatch.setattr(orch_node, "run_repo_change_for_repo", _boom)
 
     # Patch the agent builder so we don't invoke a real model; instead we force one tool call.
-    def _fake_build_orchestrate_change_agent(*, repo_change_tool, mcp_config_path=None):
+    def _fake_build_orchestrate_change_agent(
+        *, repo_change_tool, mcp_config_path=None, github_default_org=None
+    ):
         class _Agent:
             async def run(self, user_prompt, deps):
                 tool_out = await repo_change_tool(

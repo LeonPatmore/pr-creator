@@ -23,6 +23,7 @@ class OrchestratorState:
     working_dir: Optional[Path] = None
     # GitHub auth token (CLI flag wins; otherwise init step falls back to env GITHUB_TOKEN).
     github_token: Optional[str] = None
+    github_default_org: Optional[str] = None
 
     cli_prompt: Optional[str] = None
     prompt_config_owner: Optional[str] = None

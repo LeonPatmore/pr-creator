@@ -129,7 +129,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 
 **Repo discovery (optional)**
 - `DATADOG_API_KEY` / `DATADOG_APP_KEY` — required if using Datadog repo discovery.
-- `GITHUB_DEFAULT_ORG` — default GitHub org/owner to prepend when repo args are provided without an owner (e.g., `--repo my-repo` -> `github.com/<org>/my-repo.git`).
+- `GITHUB_DEFAULT_ORG` — default GitHub org/owner to prepend when repo args are provided without an owner (e.g., `--repo my-repo` -> `github.com/<org>/my-repo.git`). Also provided as context to the orchestrator agent when discovering repositories.
 
 **PR submission & branch naming**
 - `SUBMIT_CHANGE` — submitter; default `github`.

@@ -314,3 +314,50 @@ def test_system_prompt_includes_mcp_instructions(
 
     finally:
         config_path.unlink(missing_ok=True)
+
+
+@patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
+def test_system_prompt_includes_github_default_org(
+    mock_agent_class, mock_repo_change_tool
+):
+    """
+    Test that system prompt includes GitHub default org when provided.
+
+    The system prompt should:
+    - Include GitHub default org information when provided
+    - Not mention GitHub default org when not provided
+    """
+    # Capture system prompts from Agent constructor calls
+    system_prompts = []
+
+    def capture_system_prompt(**kwargs):
+        mock_instance = MagicMock()
+        system_prompts.append(kwargs.get("system_prompt", ""))
+        return mock_instance
+
+    mock_agent_class.side_effect = capture_system_prompt
+
+    # Build agent without github_default_org
+    build_orchestrate_change_agent(
+        repo_change_tool=mock_repo_change_tool,
+        mcp_config_path=None,
+        github_default_org=None,
+    )
+    prompt_without_org = system_prompts[-1]
+
+    # Build agent with github_default_org
+    build_orchestrate_change_agent(
+        repo_change_tool=mock_repo_change_tool,
+        mcp_config_path=None,
+        github_default_org="my-test-org",
+    )
+    prompt_with_org = system_prompts[-1]
+
+    # Verify prompts are different
+    assert len(prompt_with_org) > len(prompt_without_org)
+    assert "my-test-org" in prompt_with_org
+    assert "my-test-org" not in prompt_without_org
+    assert "GITHUB DEFAULT ORGANIZATION" in prompt_with_org
+    assert "GITHUB DEFAULT ORGANIZATION" not in prompt_without_org
+
+    logger.info("✓ System prompt correctly includes GitHub default org when provided")

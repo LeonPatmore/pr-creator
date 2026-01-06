@@ -99,6 +99,7 @@ class OrchestrateChange(BaseNode):
         agent, tool_called = build_orchestrate_change_agent(
             repo_change_tool=bound_repo_change_tool,
             mcp_config_path=ctx.state.mcp_config_path,
+            github_default_org=ctx.state.github_default_org,
         )
 
         # Build user prompt with appropriate prefix based on whether repo is specified

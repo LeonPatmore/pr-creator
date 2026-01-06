@@ -74,7 +74,10 @@ def _load_mcp_toolsets(mcp_config_path: Optional[Path]) -> list:
 
 
 def build_orchestrate_change_agent(
-    *, repo_change_tool: RepoChangeTool, mcp_config_path: Optional[Path] = None
+    *,
+    repo_change_tool: RepoChangeTool,
+    mcp_config_path: Optional[Path] = None,
+    github_default_org: Optional[str] = None,
 ) -> tuple[Agent[OrchestrateChangeDeps, OrchestratorResponse], dict[str, bool]]:
     """
     Build a pydantic-ai agent for orchestration.
@@ -85,6 +88,9 @@ def build_orchestrate_change_agent(
 
     If mcp_config_path is provided, loads MCP servers from the config file and adds them
     as toolsets to the agent, enabling it to access external resources (e.g., GitHub repos).
+
+    If github_default_org is provided, includes it as context in the system prompt to help
+    the agent construct proper repository URLs when discovering repositories.
     """
 
     tool_called = {"called": False}
@@ -97,7 +103,10 @@ def build_orchestrate_change_agent(
     # Build system prompt based on whether MCP tools are available
     system_prompt_parts = [
         "# ROLE",
-        "You are a change orchestrator. Your job is to determine which repositories need changes and delegate work to the `repo_change` tool.",
+        (
+            "You are a change orchestrator. Your job is to determine which "
+            "repositories need changes and delegate work to the `repo_change` tool."
+        ),
         "",
         "# CRITICAL CONSTRAINTS",
         "- You must NOT directly modify any files yourself",
@@ -126,8 +135,14 @@ def build_orchestrate_change_agent(
         ),
         "",
         "# REPO URL REQUIREMENTS (STRICT)",
-        "Only call `repo_change` when `repo_url` is a valid GitHub HTTPS URL like `https://github.com/<owner>/<repo>`.",
-        "Never call `repo_change` with empty strings, partial slugs you haven't verified, or placeholder values containing `UNKNOWN`.",
+        (
+            "Only call `repo_change` when `repo_url` is a valid GitHub HTTPS URL "
+            "like `https://github.com/<owner>/<repo>`."
+        ),
+        (
+            "Never call `repo_change` with empty strings, partial slugs you "
+            "haven't verified, or placeholder values containing `UNKNOWN`."
+        ),
         "",
     ]
 
@@ -140,6 +155,16 @@ def build_orchestrate_change_agent(
                 "- Explore codebases and understand context",
                 "- Search for repositories",
                 "- Gather information before planning changes",
+                "",
+            ]
+        )
+
+    if github_default_org:
+        system_prompt_parts.extend(
+            [
+                "# GITHUB DEFAULT ORGANIZATION",
+                f"The default GitHub organization is: {github_default_org}",
+                f"When constructing repository URLs, you can use: https://github.com/{github_default_org}/<repo-name>",
                 "",
             ]
         )
@@ -157,8 +182,14 @@ def build_orchestrate_change_agent(
             "- prompt: Repo-specific instructions for what changes to make",
             "",
             "Important notes:",
-            "- The tool automatically handles the FULL workflow: applying changes, committing, pushing, and creating PRs",
-            "- Do NOT instruct the tool to create PRs - it already does this automatically",
+            (
+                "- The tool automatically handles the FULL workflow: applying "
+                "changes, committing, pushing, and creating PRs"
+            ),
+            (
+                "- Do NOT instruct the tool to create PRs - it already does this "
+                "automatically"
+            ),
             "- Your job is ONLY to craft clear, repo-specific change instructions",
             "- Call this tool exactly once per repository that needs changes",
             (
