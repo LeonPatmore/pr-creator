@@ -196,7 +196,6 @@ def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
         push_url,
         refspecs=[refspec],
         errstream=null_stream,
-        outstream=null_stream,
     )
 
 

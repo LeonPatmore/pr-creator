@@ -38,6 +38,5 @@ def resolve_and_normalize_repos(
             out.append(r)
             seen_norm.add(r)
 
-    if not out:
-        raise ValueError("No repositories provided or discovered; cannot proceed.")
+    # Empty repos list is now allowed - orchestrator can discover repos via MCP
     return out

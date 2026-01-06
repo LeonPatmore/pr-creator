@@ -40,9 +40,12 @@ class OrchestrateChange(BaseNode):
     AI-driven orchestration step.
 
     This step is an AI agent that can "call" the repo-change workflow as a tool.
+
+    If repo_url is None, the agent is responsible for discovering the target repository
+    using available tools (e.g., GitHub MCP tools).
     """
 
-    repo_url: str
+    repo_url: str | None
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         tool_prs: list[dict[str, str]] = []
@@ -73,15 +76,25 @@ class OrchestrateChange(BaseNode):
             return [CreatedPR.model_validate(p) for p in tool_prs]
 
         agent, tool_called = build_orchestrate_change_agent(
-            repo_change_tool=_tool_repo_change
+            repo_change_tool=_tool_repo_change,
+            mcp_config_path=ctx.state.mcp_config_path,
         )
 
-        user_prompt = (
-            f"Base request:\n{ctx.state.prompt.strip()}\n\n"
-            f"Repo:\n- repo_url: {self.repo_url}\n"
-        )
+        # Build user prompt with appropriate prefix based on whether repo is specified
+        if self.repo_url:
+            user_prompt = (
+                f"This change prompt applies to the following repo: {self.repo_url}\n\n"
+                f"Base request:\n{ctx.state.prompt.strip()}\n"
+            )
+        else:
+            user_prompt = (
+                "Target repo is not defined, you should discover it with any available tools or context. "
+                "For example, you can use github tools to search for the relevant repository.\n\n"
+                f"Base request:\n{ctx.state.prompt.strip()}\n"
+            )
+
         result = await agent.run(
-            user_prompt, deps=OrchestrateChangeDeps(repo_url=self.repo_url)
+            user_prompt, deps=OrchestrateChangeDeps(repo_url=self.repo_url or "")
         )
         prs = result.output
 

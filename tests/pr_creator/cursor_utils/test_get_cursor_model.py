@@ -1,5 +1,3 @@
-import os
-
 from pr_creator.cursor_utils.config import get_cursor_model
 
 
@@ -24,6 +22,8 @@ def test_get_cursor_model_intent_override(monkeypatch):
 def test_get_cursor_model_intent_is_sanitized(monkeypatch):
     monkeypatch.setenv("CURSOR_MODEL", "base-model")
     monkeypatch.setenv("CURSOR_MODEL_EVALUATE", "eval-model")
+    # Ensure CURSOR_MODEL_CHANGE is not set (to prevent interference)
+    monkeypatch.delenv("CURSOR_MODEL_CHANGE", raising=False)
 
     # ensure we don't accept weird suffixes; we normalize "evaluate\n" -> "EVALUATE"
     assert get_cursor_model(intent=" evaluate\n") == "eval-model"

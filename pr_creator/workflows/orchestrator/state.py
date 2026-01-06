@@ -48,6 +48,9 @@ class OrchestratorState:
     # Stable branch naming / rollout id (propagated to repo-change workflow)
     change_id: Optional[str] = None
 
+    # MCP servers configuration
+    mcp_config_path: Optional[Path] = None
+
     # Orchestrator outputs
     repo_prompts: Dict[str, str] = field(default_factory=dict)
     planning_clones: Dict[str, Path] = field(default_factory=dict)

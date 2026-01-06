@@ -64,15 +64,16 @@ You choose exactly **one base prompt source**:
 - **Prompt “tail”**: if you use prompt config or Jira and also pass `--prompt`, the CLI prompt is treated as **higher priority** and is placed in a top “Highest priority instructions (CLI)” section.
 
 ### Multi-repo changes
-Target repos in one (or both) of these ways:
+Target repos in one (or more) of these ways:
 - **Explicit list**: pass `--repo` multiple times. Each value can be a full URL, an `owner/repo` slug, or (with `GITHUB_DEFAULT_ORG`) a bare repo name.
 - **Datadog discovery**: pass `--datadog-team` to discover repos and add them to the list (requires `DATADOG_API_KEY` + `DATADOG_APP_KEY`).
+- **MCP-driven discovery** (NEW): if `--mcp-config` is provided and no `--repo` is specified, the orchestrator agent will discover the target repository using available MCP tools (e.g., GitHub MCP server) based on the prompt.
 
 Repo processing behavior:
 - **Dedup + normalization**: repo inputs are normalized to GitHub HTTPS URLs and deduplicated.
 - **Optional relevance filter**: if a `relevance_prompt` is present, each repo is evaluated and only relevant repos get changes applied.
   - Relevance decisions are cached on disk at `~/.pr-creator/relevance-cache.json`, keyed by `(repo_identifier, evaluated_sha, prompt_hash)`, to avoid repeating the same checks across runs.
-- **Review before commit**: after changes are applied, the Cursor agent reviews the repo’s uncommitted state and may request a single follow-up apply pass before committing.
+- **Review before commit**: after changes are applied, the Cursor agent reviews the repo's uncommitted state and may request a single follow-up apply pass before committing.
 - **Repeatable reruns**: set `--change-id` to use stable branch naming (`<change_id>/<slug>`) and a stable workspace path under `--working-dir` (useful for rerunning after fixes).
 
 ### Environment variables
@@ -107,7 +108,10 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `CURSOR_AGENT_HEARTBEAT_SECONDS` — emit a “still running” message when no output is seen for this many seconds (default: `30`).
 
 **Orchestration**
-- `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `gpt-5.2`.
+- `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `openai:gpt-5.2`.
+
+**MCP servers (optional)**
+- `MCP_CONFIG` — path to MCP servers configuration file (JSON format). If provided, the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.
 
 **Agent context (optional)**
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
@@ -173,11 +177,18 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `--change-id` — Change ID to use for static branch names. When provided, ensures re-runs use the same branch name (format: `{branch_prefix}-{change_id}`). Can also be set in prompt config YAML (takes precedence over CLI arg).
 
 **Repositories**
-- `--repo` — repository URL to process. Can be passed multiple times; required if not using Datadog discovery.
+- `--repo` — repository URL to process. Can be passed multiple times. Optional; if omitted, orchestrator will attempt to discover repos.
 
 **Datadog discovery**
 - `--datadog-team` — Datadog team name to discover repos (requires `DATADOG_API_KEY` and `DATADOG_APP_KEY`).
 - `--datadog-site` — Datadog API base URL; default `https://api.datadoghq.com`.
+
+**MCP integration**
+- `--mcp-config` — path to MCP servers configuration file (JSON format). Enables the orchestrator to:
+  - Access external tools (e.g., GitHub API for reading repos)
+  - Discover target repositories when `--repo` is not specified
+  - Gather context from multiple sources before planning changes
+  - See [pydantic-ai MCP docs](https://ai.pydantic.dev/mcp/client/) for config format.
 
 **Runtime**
 - `--working-dir` — where repos are cloned; default `~/.pr-creator/repos`.
@@ -217,6 +228,53 @@ docker run --rm \
   --working-dir /tmp/repos \
   --log-level INFO
 ```
+
+### MCP Server Integration (Optional)
+
+The orchestrator can use [Model Context Protocol (MCP)](https://ai.pydantic.dev/mcp/) servers to access external tools and context. The most common use case is the GitHub MCP server for repository discovery and exploration.
+
+#### Use Cases
+1. **Automatic repository discovery**: Run pr-creator without specifying `--repo`, and let the orchestrator find the target repo based on the prompt
+2. **Context gathering**: Orchestrator can explore repositories, check README files, search for patterns, etc., before planning changes
+
+#### Setup
+
+1. Create an MCP configuration file (`mcp-servers.json`):
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+2. Run pr-creator with MCP enabled:
+```sh
+# Example 1: Let orchestrator discover the repo
+pr-creator \
+  --prompt "Add a health check endpoint to the main API service" \
+  --mcp-config mcp-servers.json \
+  --working-dir ~/.pr-creator/repos
+
+# Example 2: Use MCP for context gathering with explicit repo
+pr-creator \
+  --prompt "Update dependencies based on the README requirements" \
+  --repo https://github.com/owner/repo \
+  --mcp-config mcp-servers.json \
+  --working-dir ~/.pr-creator/repos
+```
+
+**Note**: The orchestrator agent will use GitHub MCP tools to search repositories, read files, and gather context before planning changes.
 
 ### Developer
 **Commands**

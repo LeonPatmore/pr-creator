@@ -33,7 +33,15 @@ def parse_args() -> argparse.Namespace:
         "--prompt-config-path",
         help="Path to the YAML file in the prompt config repo",
     )
-    parser.add_argument("--repo", action="append", required=False)
+    parser.add_argument(
+        "--repo",
+        action="append",
+        required=False,
+        help=(
+            "Target repository URL or short name (owner/repo). Can be specified multiple times. "
+            "If omitted, the orchestrator will attempt to discover repos."
+        ),
+    )
     parser.add_argument(
         "--datadog-team",
         help="Datadog team name for repo discovery (requires DATADOG_API_KEY and DATADOG_APP_KEY)",
@@ -94,6 +102,14 @@ def parse_args() -> argparse.Namespace:
             "GitHub token used for clone/push/PR creation. If omitted, falls back to env GITHUB_TOKEN."
         ),
     )
+    parser.add_argument(
+        "--mcp-config",
+        help=(
+            "Path to MCP servers configuration file (JSON format). "
+            "If provided, the orchestrator will load MCP servers as tools. "
+            "See https://ai.pydantic.dev/mcp/client/ for config format."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -129,6 +145,11 @@ def main() -> None:
             change_agent_secret_env_keys=list(args.secret_env or []),
             datadog_team=args.datadog_team,
             change_id=args.change_id,
+            mcp_config_path=(
+                Path(args.mcp_config).expanduser()
+                if (args.mcp_config or "").strip()
+                else None
+            ),
         )
         if (args.datadog_site or "").strip():
             state_kwargs["datadog_site"] = args.datadog_site.replace(
