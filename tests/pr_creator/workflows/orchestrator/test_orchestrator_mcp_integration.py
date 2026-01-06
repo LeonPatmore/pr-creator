@@ -13,6 +13,7 @@ import pytest
 from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
     build_orchestrate_change_agent,
     OrchestrateChangeDeps,
+    OrchestratorResponse,
 )
 from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
@@ -254,7 +255,10 @@ async def test_orchestrator_agent_can_list_github_repos():
             len(tool_usage.unique_repos) > 0
         ), "No repositories discovered - GitHub API not returning data!"
         assert len(repo_change_calls) == 0, "repo_change should not have been called"
-        assert isinstance(result.output, list), "Result should be a list"
+        assert isinstance(
+            result.output, OrchestratorResponse
+        ), "Result should be OrchestratorResponse"
+        assert isinstance(result.output.results, list), "results should be a list"
 
         logger.info(
             "✅ MCP integration working: %d GitHub tool(s) used, %d repo(s) found",

@@ -1,12 +1,15 @@
 import argparse
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from .logging_config import configure_logging
 from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
 from pr_creator.context_roots import normalize_context_roots
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -160,10 +163,15 @@ def main() -> None:
         final_state = asyncio.run(run_orchestrator_workflow(state))
     except ValueError as e:
         raise SystemExit(str(e)) from e
+
     summary = {
         "irrelevant_repos": final_state.irrelevant,
         "created_prs": final_state.created_prs,
+        "orchestrator_errors": final_state.orchestrator_errors,
     }
+    if final_state.orchestrator_errors:
+        for error in final_state.orchestrator_errors:
+            logger.error("Orchestrator error: %s", error)
     print(json.dumps(summary))
 
 

@@ -58,3 +58,6 @@ class OrchestratorState:
     # Rollup outputs from repo-change runs
     created_prs: List[Dict[str, str]] = field(default_factory=list)
     irrelevant: List[str] = field(default_factory=list)
+
+    # Errors from orchestration (e.g., unable to determine target repo)
+    orchestrator_errors: List[str] = field(default_factory=list)

@@ -68,6 +68,8 @@ Target repos in one (or more) of these ways:
 - **Explicit list**: pass `--repo` multiple times. Each value can be a full URL, an `owner/repo` slug, or (with `GITHUB_DEFAULT_ORG`) a bare repo name.
 - **Datadog discovery**: pass `--datadog-team` to discover repos and add them to the list (requires `DATADOG_API_KEY` + `DATADOG_APP_KEY`).
 - **MCP-driven discovery** (NEW): if `--mcp-config` is provided and no `--repo` is specified, the orchestrator agent will discover the target repository using available MCP tools (e.g., GitHub MCP server) based on the prompt.
+  - If the orchestrator cannot determine which repository is required, it will add an error to the workflow state (`orchestrator_errors` list) instead of proceeding with changes.
+  - If the orchestrator calls `repo_change` and the repo-change workflow fails for a repo (e.g., clone/apply/review/submit error), the error is captured and added to `orchestrator_errors` instead of crashing the entire run.
 
 Repo processing behavior:
 - **Dedup + normalization**: repo inputs are normalized to GitHub HTTPS URLs and deduplicated.
@@ -275,6 +277,32 @@ pr-creator \
 ```
 
 **Note**: The orchestrator agent will use GitHub MCP tools to search repositories, read files, and gather context before planning changes.
+
+### CLI Output
+
+The CLI outputs a JSON summary to stdout with the following structure:
+
+```json
+{
+  "irrelevant_repos": ["https://github.com/owner/repo1"],
+  "created_prs": [
+    {
+      "repo_url": "https://github.com/owner/repo2",
+      "branch": "auto/pr-update-deps",
+      "pr_url": "https://github.com/owner/repo2/pull/123",
+      "pushed_sha": "abc123..."
+    }
+  ],
+  "orchestrator_errors": [
+    "Could not determine target repository from prompt..."
+  ]
+}
+```
+
+**Fields:**
+- `irrelevant_repos`: List of repository URLs that were filtered out by the relevance check
+- `created_prs`: List of PR records for repositories where changes were successfully applied (at most one record per repo; retries update/overwrite the record instead of appending duplicates)
+- `orchestrator_errors`: List of error messages from the orchestrator (e.g., when it cannot determine which repositories to target). Empty list if no errors occurred.
 
 ### Developer
 **Commands**
