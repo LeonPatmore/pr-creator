@@ -6,7 +6,6 @@ from pydantic_graph import BaseNode, End, GraphRunContext
 class NextRepoOrchestrator(BaseNode):
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         if not ctx.state.repos:
-            # No repos left in the queue
             return End(None)
 
         repo_url = ctx.state.repos.pop(0)
