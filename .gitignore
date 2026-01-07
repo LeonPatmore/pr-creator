@@ -10,3 +10,9 @@ dist/
 build/
 *.egg-info/
 .vscode
+
+# Generated workflow diagram intermediate files (keep PNGs in diagrams/)
+diagrams/*.dot
+diagrams/workflow_diagram
+diagrams/orchestrator_workflow
+diagrams/repo_change_workflow

@@ -2,6 +2,14 @@
 
 Simple workflow runner that clones target repos, applies changes via a change agent, and submits PRs.
 
+### Workflow Architecture
+
+![PR Creator Workflows](diagrams/workflow_diagram.png)
+
+The system consists of two main workflows:
+- **Orchestrator Workflow**: Manages multi-repo coordination, discovers repos, evaluates relevance
+- **Repo Change Workflow**: Handles individual repo changes with AI review and CI integration
+
 ### Use cases
 - **Multi-repo rollouts**: apply the same change across many repos (dependency bumps, config standardization, lint/format rules, CI updates).
 - **Safe iteration on the same branch**: use `--change-id` so reruns target a stable branch name and you can iterate until the PR is clean.

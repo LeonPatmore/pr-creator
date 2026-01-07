@@ -20,6 +20,7 @@ black = "*"
 twine = "*"
 build = "*"
 python-dotenv = "*"
+graphviz = "*"
 
 [requires]
 python_version = "3.14"

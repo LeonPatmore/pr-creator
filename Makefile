@@ -32,3 +32,7 @@ build:
 upload: build
 	pipenv run twine check dist/*
 	pipenv run twine upload dist/*
+
+.PHONY: diagrams
+diagrams:
+	cd diagrams && python generate_workflow_diagram.py
