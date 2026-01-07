@@ -179,7 +179,9 @@ def _ahead_behind_vs_origin(repo: Repo, branch: str) -> tuple[int, int]:
     return ahead, behind
 
 
-def _push_branch(repo: Repo, branch: str, token: str, origin_url: str, *, force: bool = False) -> None:
+def _push_branch(
+    repo: Repo, branch: str, token: str, origin_url: str, *, force: bool = False
+) -> None:
     """Push branch to remote."""
     # Helpful for debugging env propagation without leaking the full token.
     logger.info("[submit] using GitHub token (%s)", _token_debug_str(token))
@@ -191,7 +193,9 @@ def _push_branch(repo: Repo, branch: str, token: str, origin_url: str, *, force:
     if force:
         refspec = f"+{refspec}"
     # Avoid logging tokens; log a sanitized URL and silence push output streams.
-    logger.info("[submit] %s %s to origin", "force-pushing" if force else "pushing", refspec)
+    logger.info(
+        "[submit] %s %s to origin", "force-pushing" if force else "pushing", refspec
+    )
     null_stream = io.BytesIO()
     porcelain.push(
         repo.path,
@@ -382,7 +386,7 @@ class GithubSubmitter(SubmitChange):
                 return False
             if ahead == 0:
                 return False
-            
+
             # If both ahead and behind, the change agent rewrote history (e.g., reset/amend).
             # Force push since we own this feature branch.
             force = behind > 0

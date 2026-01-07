@@ -89,8 +89,7 @@ class CursorChangeAgent(ChangeAgent):
             "- Only modify files that are necessary to satisfy the task\n"
             "\n"
             "# TASK\n"
-            "\n"
-            + (prompt or "")
+            "\n" + (prompt or "")
         )
         self._runner.run_prompt(
             guarded_prompt,

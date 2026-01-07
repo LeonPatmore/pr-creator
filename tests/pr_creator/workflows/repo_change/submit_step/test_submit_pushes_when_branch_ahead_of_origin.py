@@ -74,7 +74,9 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
 
     push_calls: list[str] = []
 
-    def _push(repo_obj: Repo, branch: str, token: str, origin_url: str, *, force: bool = False) -> None:
+    def _push(
+        repo_obj: Repo, branch: str, token: str, origin_url: str, *, force: bool = False
+    ) -> None:
         push_calls.append(branch)
 
     monkeypatch.setattr(github_submitter, "_push_branch", _push)
