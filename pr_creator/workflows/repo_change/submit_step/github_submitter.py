@@ -179,7 +179,7 @@ def _ahead_behind_vs_origin(repo: Repo, branch: str) -> tuple[int, int]:
     return ahead, behind
 
 
-def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
+def _push_branch(repo: Repo, branch: str, token: str, origin_url: str, *, force: bool = False) -> None:
     """Push branch to remote."""
     # Helpful for debugging env propagation without leaking the full token.
     logger.info("[submit] using GitHub token (%s)", _token_debug_str(token))
@@ -188,8 +188,10 @@ def _push_branch(repo: Repo, branch: str, token: str, origin_url: str) -> None:
         raise RuntimeError(f"Unsupported origin URL for token push: {origin_url}")
 
     refspec = f"refs/heads/{branch}:refs/heads/{branch}"
+    if force:
+        refspec = f"+{refspec}"
     # Avoid logging tokens; log a sanitized URL and silence push output streams.
-    logger.info("[submit] pushing %s to origin", refspec)
+    logger.info("[submit] %s %s to origin", "force-pushing" if force else "pushing", refspec)
     null_stream = io.BytesIO()
     porcelain.push(
         repo.path,
@@ -370,7 +372,7 @@ class GithubSubmitter(SubmitChange):
             if not github_token:
                 return False
             ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
-            if behind > 0:
+            if behind > 0 and ahead == 0:
                 logger.warning(
                     "[submit] local branch is behind origin/%s (behind=%s, ahead=%s); skipping push",
                     current_branch,
@@ -380,13 +382,25 @@ class GithubSubmitter(SubmitChange):
                 return False
             if ahead == 0:
                 return False
-            logger.info(
-                "[submit] local branch ahead of origin/%s by %s commits; pushing",
-                current_branch,
-                ahead,
-            )
+            
+            # If both ahead and behind, the change agent rewrote history (e.g., reset/amend).
+            # Force push since we own this feature branch.
+            force = behind > 0
+            if force:
+                logger.info(
+                    "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing",
+                    current_branch,
+                    behind,
+                    ahead,
+                )
+            else:
+                logger.info(
+                    "[submit] local branch ahead of origin/%s by %s commits; pushing",
+                    current_branch,
+                    ahead,
+                )
             pushed_sha = _sha_to_hex(repo.head())
-            _push_branch(repo, current_branch, github_token, origin)
+            _push_branch(repo, current_branch, github_token, origin, force=force)
             return True
 
         # Commit only when there is something to commit.
@@ -459,7 +473,17 @@ class GithubSubmitter(SubmitChange):
 
         if pushed and committed:
             pushed_sha = pushed_sha or _sha_to_hex(repo.head())
-            _push_branch(repo, current_branch, github_token, origin)
+            # Check if we need to force push (e.g., if change agent amended/reset commits)
+            ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
+            force = behind > 0
+            if force:
+                logger.info(
+                    "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing new commit",
+                    current_branch,
+                    behind,
+                    ahead,
+                )
+            _push_branch(repo, current_branch, github_token, origin, force=force)
 
         if not remote_repo:
             logger.warning("GitHub token not set; skipping PR creation")

@@ -25,9 +25,13 @@ def _init_repo(repo_dir: Path) -> tuple[Repo, bytes]:
     return repo, repo.head()
 
 
-def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
+def test_submit_force_pushes_when_branch_diverged_from_origin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """
+    When a change agent resets or amends commits, the local branch diverges from origin
+    (both ahead=1 and behind=1). This test verifies that we force-push in this scenario.
+    """
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     repo, first_sha = _init_repo(repo_dir)
@@ -37,10 +41,7 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
     repo.refs.set_symbolic_ref(b"HEAD", b"refs/heads/feature/test")
     porcelain.checkout_branch(repo, "feature/test", force=True)
 
-    # Simulate the fetched remote tracking branch pointing to the old commit.
-    repo.refs[b"refs/remotes/origin/feature/test"] = first_sha
-
-    # Create a new commit locally (working tree ends up clean).
+    # Create a commit and simulate it being pushed.
     (repo_dir / "README.md").write_text("hello world\n", encoding="utf-8")
     porcelain.add(str(repo_dir))
     porcelain.commit(
@@ -50,10 +51,33 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
         committer=b"tester <tester@example.com>",
         sign=False,
     )
-    assert repo.head() != first_sha  # local HEAD is ahead of origin tracking
+    second_sha = repo.head()
+    # Simulate the remote tracking ref pointing to the second commit.
+    repo.refs[b"refs/remotes/origin/feature/test"] = second_sha
+
+    # Now simulate the change agent resetting to first commit and creating a new commit.
+    # This creates a diverged state: local is ahead by 1, behind by 1.
+    repo.refs.set_symbolic_ref(b"HEAD", b"refs/heads/feature/test")
+    repo.refs[b"refs/heads/feature/test"] = first_sha
+    (repo_dir / "README.md").write_text("hello universe\n", encoding="utf-8")
+    porcelain.add(str(repo_dir))
+    porcelain.commit(
+        str(repo_dir),
+        message=b"third",
+        author=b"tester <tester@example.com>",
+        committer=b"tester <tester@example.com>",
+        sign=False,
+    )
+    third_sha = repo.head()
+    assert third_sha != second_sha  # different commit
+
+    # Verify we're in a diverged state.
+    ahead, behind = github_submitter._ahead_behind_vs_origin(repo, "feature/test")
+    assert ahead == 1
+    assert behind == 1
 
     dummy_remote_repo = SimpleNamespace()
-    pushed_sha = github_submitter._sha_to_hex(repo.head())
+    pushed_sha = github_submitter._sha_to_hex(third_sha)
     expected = {
         "repo_url": "https://github.com/example/acme.git",
         "branch": "feature/test",
@@ -72,10 +96,12 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
         lambda origin, github_token, base_branch: (dummy_remote_repo, "main"),
     )
 
-    push_calls: list[str] = []
+    push_calls: list[tuple[str, bool]] = []
 
-    def _push(repo_obj: Repo, branch: str, token: str, origin_url: str, *, force: bool = False) -> None:
-        push_calls.append(branch)
+    def _push(
+        repo_obj: Repo, branch: str, token: str, origin_url: str, *, force: bool = False
+    ) -> None:
+        push_calls.append((branch, force))
 
     monkeypatch.setattr(github_submitter, "_push_branch", _push)
     monkeypatch.setattr(
@@ -87,4 +113,5 @@ def test_submit_pushes_when_clean_but_branch_ahead_of_origin(
     submitter = github_submitter.GithubSubmitter(github_token="dummy")
     result = submitter.submit(repo_dir, branch="feature/test")
     assert result == expected
-    assert push_calls == ["feature/test"]
+    # Verify we force-pushed (force=True).
+    assert push_calls == [("feature/test", True)]
