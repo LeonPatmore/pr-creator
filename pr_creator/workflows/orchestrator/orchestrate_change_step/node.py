@@ -45,6 +45,7 @@ async def repo_change_tool(
         context_roots=list(ctx.state.context_roots or []),
         change_agent_secrets=dict(ctx.state.change_agent_secrets or {}),
         change_id=ctx.state.change_id,
+        base_prompt=ctx.state.prompt,
     )
     try:
         final_repo_state = await run_repo_change_for_repo(repo_state, repo_url=repo_url)

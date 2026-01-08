@@ -15,6 +15,8 @@ class RepoChangeState:
 
     prompt: str
     working_dir: Path
+    # Original base prompt from orchestrator (before repo-specific refinement)
+    base_prompt: Optional[str] = None
     # GitHub auth token forwarded from orchestrator (CLI flag wins; otherwise env GITHUB_TOKEN).
     github_token: Optional[str] = None
     context_roots: List[str] = field(default_factory=list)

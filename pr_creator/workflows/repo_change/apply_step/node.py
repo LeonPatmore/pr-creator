@@ -17,6 +17,52 @@ logger = logging.getLogger(__name__)
 _agent = get_change_agent()
 
 
+def _build_change_prompt(
+    *,
+    repo_specific_prompt: str,
+    base_prompt: str | None,
+    ci_feedback: str,
+    review_feedback: str,
+) -> str:
+    """
+    Build the final prompt for the change agent.
+
+    Priority order (highest to lowest):
+    1. CI failures (must fix immediately)
+    2. Review feedback (must address)
+    3. Repo-specific instructions (tailored by orchestrator)
+    4. Original base request (context from pr-creator CLI)
+    """
+    sections: list[str] = []
+
+    if ci_feedback:
+        sections.append(
+            "## CRITICAL: Fix failing CI / GitHub Actions\n"
+            "The PR is failing CI. Use the logs below to fix the issue.\n"
+            "If there is a conflict, prioritize this section.\n\n"
+            f"{ci_feedback}\n"
+        )
+
+    if review_feedback:
+        sections.append(
+            "## CRITICAL: Address review feedback\n"
+            "Apply the following review feedback before doing anything else.\n"
+            "If there is a conflict, prioritize this section.\n\n"
+            f"{review_feedback}\n"
+        )
+
+    sections.append(f"{repo_specific_prompt.strip()}\n")
+
+    if base_prompt and base_prompt.strip() != repo_specific_prompt.strip():
+        sections.append(
+            "---\n\n"
+            "## Original base request (for context)\n"
+            f"{base_prompt.strip()}\n"
+        )
+
+    return "\n\n".join(sections).rstrip()
+
+
 def _normalize_eol(data: bytes) -> bytes:
     # Normalize CRLF/CR to LF for comparison.
     return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
@@ -152,33 +198,12 @@ class ApplyChanges(BaseNode):
         path = ctx.state.cloned[self.repo_url]
         logger.info("Applying change agent on %s at %s", self.repo_url, path)
 
-        base_prompt = ctx.state.prompt
-        ci_pending = ctx.state.ci_pending.pop(self.repo_url, "").strip()
-        pending = ctx.state.review_pending.pop(self.repo_url, "").strip()
-        if ci_pending or pending:
-            sections: list[str] = []
-            if ci_pending:
-                sections.append(
-                    "## CRITICAL: Fix failing CI / GitHub Actions\n"
-                    "The PR is failing CI. Use the logs below to fix the issue.\n"
-                    "If there is a conflict, prioritize this section.\n\n"
-                    f"{ci_pending}\n"
-                )
-            if pending:
-                sections.append(
-                    "## CRITICAL: Address review feedback\n"
-                    "Apply the following review feedback before doing anything else.\n"
-                    "If there is a conflict, prioritize this section.\n\n"
-                    f"{pending}\n"
-                )
-            prompt = (
-                "\n\n".join(sections).rstrip()
-                + "\n\n"
-                + "## Original request (retain intent)\n"
-                + f"{base_prompt.strip()}\n"
-            )
-        else:
-            prompt = base_prompt
+        prompt = _build_change_prompt(
+            repo_specific_prompt=ctx.state.prompt,
+            base_prompt=ctx.state.base_prompt,
+            ci_feedback=ctx.state.ci_pending.pop(self.repo_url, "").strip(),
+            review_feedback=ctx.state.review_pending.pop(self.repo_url, "").strip(),
+        )
 
         _agent.run(
             path,
