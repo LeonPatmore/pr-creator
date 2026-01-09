@@ -13,6 +13,7 @@ from pr_creator.workflows.orchestrator.init_step.prompt_loading_support.prompt_l
 DEFAULT_WORKING_DIR = Path.home() / ".pr-creator" / "repos"
 DEFAULT_DATADOG_SITE = "datadoghq.com"
 DEFAULT_PROMPT_CONFIG_REF = "main"
+DEFAULT_MCP_CONFIG_PATH = Path.home() / ".pr-creator" / "mcp-servers.json"
 
 
 class InitOrchestrator(BaseNode):
@@ -31,6 +32,14 @@ class InitOrchestrator(BaseNode):
 
         if not ctx.state.github_default_org:
             ctx.state.github_default_org = os.environ.get("GITHUB_DEFAULT_ORG")
+
+        # MCP config path: CLI flag > env var > default if file exists
+        if not ctx.state.mcp_config_path:
+            env_mcp_config = os.environ.get("MCP_CONFIG")
+            if env_mcp_config:
+                ctx.state.mcp_config_path = Path(env_mcp_config).expanduser()
+            elif DEFAULT_MCP_CONFIG_PATH.exists():
+                ctx.state.mcp_config_path = DEFAULT_MCP_CONFIG_PATH
 
         resolve_secrets_and_context(ctx.state)
         load_and_merge_prompts(ctx.state)

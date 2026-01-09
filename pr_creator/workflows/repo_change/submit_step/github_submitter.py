@@ -291,28 +291,29 @@ def _find_existing_pr(
     return None
 
 
-def _return_existing_pr_if_any(
-    remote_repo: Repository,
-    origin: str,
-    branch: str,
-    base_branch: str,
-    include_closed: bool = False,
-) -> Optional[Dict[str, str]]:
-    existing_pr = _find_existing_pr(
-        remote_repo, branch, base_branch, include_closed=include_closed
-    )
-    if not existing_pr:
-        return None
-    logger.info(
-        "[submit] found existing PR for branch %s -> %s",
-        branch,
-        existing_pr.html_url,
-    )
-    return {
-        "repo_url": origin,
-        "branch": branch,
-        "pr_url": existing_pr.html_url,
-    }
+def _update_existing_pr(
+    pr, pr_body: Optional[str] = None, pr_title: Optional[str] = None
+) -> None:
+    """Update PR description and/or title if provided."""
+    if pr_body is None and pr_title is None:
+        return
+
+    try:
+        update_kwargs = {}
+        if pr_body is not None:
+            update_kwargs["body"] = pr_body
+            logger.info("[submit] updating PR description for %s", pr.html_url)
+        if pr_title is not None:
+            update_kwargs["title"] = pr_title
+            logger.info("[submit] updating PR title for %s", pr.html_url)
+        if update_kwargs:
+            pr.edit(**update_kwargs)
+    except GithubException as exc:
+        logger.warning(
+            "[submit] failed to update existing PR %s: %s",
+            pr.html_url,
+            exc,
+        )
 
 
 class GithubSubmitter(SubmitChange):
@@ -429,13 +430,19 @@ class GithubSubmitter(SubmitChange):
                 )
                 return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
-            existing = _return_existing_pr_if_any(
-                remote_repo, origin, current_branch, base_branch
-            )
-            if existing:
+            existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
+            if existing_pr:
+                _update_existing_pr(
+                    existing_pr, pr_body=pr_body, pr_title=pr_title_final
+                )
+                result = {
+                    "repo_url": origin,
+                    "branch": current_branch,
+                    "pr_url": existing_pr.html_url,
+                }
                 if pushed_sha:
-                    existing["pushed_sha"] = pushed_sha
-                return existing
+                    result["pushed_sha"] = pushed_sha
+                return result
 
             _wait_for_remote_branch(remote_repo, current_branch)
             head_ref = _qualified_head(remote_repo, current_branch)
@@ -502,13 +509,17 @@ class GithubSubmitter(SubmitChange):
             )
             return {"repo_url": origin, "branch": current_branch, "pr_url": None}
 
-        existing = _return_existing_pr_if_any(
-            remote_repo, origin, current_branch, base_branch
-        )
-        if existing:
+        existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
+        if existing_pr:
+            _update_existing_pr(existing_pr, pr_body=pr_body, pr_title=pr_title_final)
+            result = {
+                "repo_url": origin,
+                "branch": current_branch,
+                "pr_url": existing_pr.html_url,
+            }
             if pushed_sha:
-                existing["pushed_sha"] = pushed_sha
-            return existing
+                result["pushed_sha"] = pushed_sha
+            return result
 
         # Create new PR
         _wait_for_remote_branch(remote_repo, current_branch)
@@ -523,15 +534,21 @@ class GithubSubmitter(SubmitChange):
             )
         except GithubException as exc:
             if exc.status == 422:
-                existing = _return_existing_pr_if_any(
-                    remote_repo,
-                    origin,
-                    current_branch,
-                    base_branch,
-                    include_closed=True,
+                existing_pr = _find_existing_pr(
+                    remote_repo, current_branch, base_branch, include_closed=True
                 )
-                if existing:
-                    return existing
+                if existing_pr:
+                    _update_existing_pr(
+                        existing_pr, pr_body=pr_body, pr_title=pr_title_final
+                    )
+                    result = {
+                        "repo_url": origin,
+                        "branch": current_branch,
+                        "pr_url": existing_pr.html_url,
+                    }
+                    if pushed_sha:
+                        result["pushed_sha"] = pushed_sha
+                    return result
             raise
         result = {"repo_url": origin, "branch": current_branch, "pr_url": pr.html_url}
         if pushed_sha:

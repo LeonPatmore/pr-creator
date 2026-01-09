@@ -104,10 +104,17 @@ def test_submit_force_pushes_when_branch_diverged_from_origin(
         push_calls.append((branch, force))
 
     monkeypatch.setattr(github_submitter, "_push_branch", _push)
+
+    mock_pr = SimpleNamespace(html_url="https://github.com/example/acme/pull/123")
     monkeypatch.setattr(
         github_submitter,
-        "_return_existing_pr_if_any",
-        lambda remote_repo, origin, branch, base_branch, include_closed=False: expected,
+        "_find_existing_pr",
+        lambda remote_repo, branch, base_branch, include_closed=False: mock_pr,
+    )
+    monkeypatch.setattr(
+        github_submitter,
+        "_update_existing_pr",
+        lambda pr, pr_body=None, pr_title=None: None,
     )
 
     submitter = github_submitter.GithubSubmitter(github_token="dummy")

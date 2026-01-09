@@ -121,7 +121,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `openai:gpt-5.2`.
 
 **MCP servers (optional)**
-- `MCP_CONFIG` — path to MCP servers configuration file (JSON format). If provided, the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.
+- `MCP_CONFIG` — path to MCP servers configuration file (JSON format). Defaults to `~/.pr-creator/mcp-servers.json` if that file exists. If provided (via env or CLI), the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.
 
 **Agent context (optional)**
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).
@@ -194,7 +194,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `--datadog-site` — Datadog API base URL; default `https://api.datadoghq.com`.
 
 **MCP integration**
-- `--mcp-config` — path to MCP servers configuration file (JSON format). Enables the orchestrator to:
+- `--mcp-config` — path to MCP servers configuration file (JSON format). Defaults to `~/.pr-creator/mcp-servers.json` if that file exists. Enables the orchestrator to:
   - Access external tools (e.g., GitHub API for reading repos)
   - Discover target repositories when `--repo` is not specified
   - Gather context from multiple sources before planning changes
