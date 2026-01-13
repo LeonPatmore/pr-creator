@@ -116,10 +116,21 @@ class OrchestrateChange(BaseNode):
                 f"Base request:\n{ctx.state.prompt.strip()}\n"
             )
 
-        result = await agent.run(
-            user_prompt, deps=OrchestrateChangeDeps(repo_url=self.repo_url or "")
-        )
-        response: OrchestratorResponse = result.output
+        try:
+            result = await agent.run(
+                user_prompt, deps=OrchestrateChangeDeps(repo_url=self.repo_url or "")
+            )
+            response: OrchestratorResponse = result.output
+        except Exception as e:
+            error_msg = f"Orchestrator agent failed: {type(e).__name__}: {e}"
+            logger.error("[orchestrator] %s", error_msg)
+            ctx.state.orchestrator_errors.append(error_msg)
+            # Skip to next repo (or end workflow if no more repos)
+            from pr_creator.workflows.orchestrator.next_repo_step.node import (
+                NextRepoOrchestrator,
+            )
+
+            return NextRepoOrchestrator()
 
         # Check if the agent returned an error (e.g., unable to determine target repo)
         if response.error:

@@ -78,6 +78,7 @@ Target repos in one (or more) of these ways:
 - **MCP-driven discovery** (NEW): if `--mcp-config` is provided and no `--repo` is specified, the orchestrator agent will discover the target repository using available MCP tools (e.g., GitHub MCP server) based on the prompt.
   - If the orchestrator cannot determine which repository is required, it will add an error to the workflow state (`orchestrator_errors` list) instead of proceeding with changes.
   - If the orchestrator calls `repo_change` and the repo-change workflow fails for a repo (e.g., clone/apply/review/submit error), the error is captured and added to `orchestrator_errors` instead of crashing the entire run.
+  - If MCP tool calls fail (e.g., invalid GitHub search syntax, API errors), the error is captured and added to `orchestrator_errors` instead of crashing the entire run.
 
 Repo processing behavior:
 - **Dedup + normalization**: repo inputs are normalized to GitHub HTTPS URLs and deduplicated.

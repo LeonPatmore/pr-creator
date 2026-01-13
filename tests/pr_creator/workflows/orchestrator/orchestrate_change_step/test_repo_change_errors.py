@@ -1,4 +1,5 @@
 import pytest
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
     OrchestratorResponse,
@@ -67,3 +68,49 @@ async def test_orchestrate_change_catches_repo_change_exception_and_returns_erro
     assert state.orchestrator_errors, "Expected orchestrator to record error"
     assert "repo_change workflow failed" in state.orchestrator_errors[-1]
     # No PR record should be emitted on tool failure.
+
+
+@pytest.mark.anyio
+async def test_orchestrate_change_catches_mcp_tool_exception(monkeypatch, tmp_path):
+    state = OrchestratorState(
+        prompt="base prompt",
+        relevance_prompt="",
+        repos=[],
+        working_dir=tmp_path,
+        github_token=None,
+        mcp_config_path=None,
+    )
+
+    # Patch the agent builder to simulate MCP tool failure
+    import pr_creator.workflows.orchestrator.orchestrate_change_step.node as orch_node
+
+    def _fake_build_orchestrate_change_agent(
+        *, repo_change_tool, mcp_config_path=None, github_default_org=None
+    ):
+        class _Agent:
+            async def run(self, user_prompt, deps):
+                raise UnexpectedModelBehavior(
+                    "Tool 'github_search_code' exceeded max retries count of 1"
+                )
+
+        return _Agent(), {"called": False}
+
+    monkeypatch.setattr(
+        orch_node,
+        "build_orchestrate_change_agent",
+        _fake_build_orchestrate_change_agent,
+    )
+
+    node = OrchestrateChange(repo_url=None)
+
+    class _Ctx:
+        def __init__(self, state):
+            self.state = state
+
+    await node.run(_Ctx(state))  # type: ignore[arg-type]
+
+    # MCP tool failure should be recorded as orchestrator_errors
+    assert state.created_prs == []
+    assert state.orchestrator_errors, "Expected orchestrator to record MCP error"
+    assert "UnexpectedModelBehavior" in state.orchestrator_errors[-1]
+    assert "github_search_code" in state.orchestrator_errors[-1]

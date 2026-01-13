@@ -156,6 +156,15 @@ def build_orchestrate_change_agent(
                 "- Search for repositories",
                 "- Gather information before planning changes",
                 "",
+                "# GITHUB SEARCH SYNTAX",
+                "When using GitHub search tools (e.g., github_search_code, github_search_repositories):",
+                "- Use 'org:ORGANIZATION' to search within an organization",
+                "- Use 'repo:OWNER/REPO' to search within a specific repository",
+                "- Use 'path:DIRECTORY' to limit search to a specific directory",
+                "- NEVER combine org and repo as 'org:OWNER/REPO' - this is invalid syntax",
+                "- Example valid queries: 'org:MoneyLion repo:infrastructure', 'repo:MoneyLion/infrastructure'",
+                "- Example invalid queries: 'org:MoneyLion/infrastructure' (will fail with 422 error)",
+                "",
             ]
         )
 

@@ -291,23 +291,14 @@ def _find_existing_pr(
     return None
 
 
-def _update_existing_pr(
-    pr, pr_body: Optional[str] = None, pr_title: Optional[str] = None
-) -> None:
-    """Update PR description and/or title if provided."""
-    if pr_body is None and pr_title is None:
+def _update_existing_pr(pr, pr_body: Optional[str] = None) -> None:
+    """Update PR description if provided. Title is never updated for existing PRs."""
+    if pr_body is None:
         return
 
     try:
-        update_kwargs = {}
-        if pr_body is not None:
-            update_kwargs["body"] = pr_body
-            logger.info("[submit] updating PR description for %s", pr.html_url)
-        if pr_title is not None:
-            update_kwargs["title"] = pr_title
-            logger.info("[submit] updating PR title for %s", pr.html_url)
-        if update_kwargs:
-            pr.edit(**update_kwargs)
+        logger.info("[submit] updating PR description for %s", pr.html_url)
+        pr.edit(body=pr_body)
     except GithubException as exc:
         logger.warning(
             "[submit] failed to update existing PR %s: %s",
@@ -432,9 +423,7 @@ class GithubSubmitter(SubmitChange):
 
             existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
             if existing_pr:
-                _update_existing_pr(
-                    existing_pr, pr_body=pr_body, pr_title=pr_title_final
-                )
+                _update_existing_pr(existing_pr, pr_body=pr_body)
                 result = {
                     "repo_url": origin,
                     "branch": current_branch,
@@ -511,7 +500,7 @@ class GithubSubmitter(SubmitChange):
 
         existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
         if existing_pr:
-            _update_existing_pr(existing_pr, pr_body=pr_body, pr_title=pr_title_final)
+            _update_existing_pr(existing_pr, pr_body=pr_body)
             result = {
                 "repo_url": origin,
                 "branch": current_branch,
@@ -538,9 +527,7 @@ class GithubSubmitter(SubmitChange):
                     remote_repo, current_branch, base_branch, include_closed=True
                 )
                 if existing_pr:
-                    _update_existing_pr(
-                        existing_pr, pr_body=pr_body, pr_title=pr_title_final
-                    )
+                    _update_existing_pr(existing_pr, pr_body=pr_body)
                     result = {
                         "repo_url": origin,
                         "branch": current_branch,

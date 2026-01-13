@@ -32,6 +32,7 @@ def test_submit_updates_pr_description_when_pr_exists(
     """
     When a PR already exists for the branch, the PR description should be updated
     with the current prompt (as it may have changed from the first run).
+    The PR title should NOT be updated.
     """
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -100,20 +101,19 @@ def test_submit_updates_pr_description_when_pr_exists(
     assert result is not None
     assert result["pr_url"] == "https://github.com/example/acme/pull/123"
 
-    # Verify PR description was updated with the new prompt
+    # Verify PR description was updated with the new prompt, but title was NOT updated
     mock_pr.edit.assert_called_once()
     call_kwargs = mock_pr.edit.call_args.kwargs
     assert "body" in call_kwargs
     assert "Updated prompt describing the changes" in call_kwargs["body"]
-    assert "title" in call_kwargs
-    assert call_kwargs["title"] == "Updated PR Title"
+    assert "title" not in call_kwargs
 
 
 def test_submit_updates_pr_description_only_when_pr_exists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    Verify that PR description is updated only when pr_body is provided.
+    Verify that PR description is updated when pr_body is provided, but title is never updated.
     """
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -175,9 +175,9 @@ def test_submit_updates_pr_description_only_when_pr_exists(
     assert result is not None
     assert result["pr_url"] == "https://github.com/example/acme/pull/456"
 
-    # Verify PR was updated
+    # Verify PR description was updated but title was NOT
     mock_pr.edit.assert_called_once()
     call_kwargs = mock_pr.edit.call_args.kwargs
     assert "body" in call_kwargs
     assert "Another updated prompt" in call_kwargs["body"]
-    assert "title" in call_kwargs
+    assert "title" not in call_kwargs
