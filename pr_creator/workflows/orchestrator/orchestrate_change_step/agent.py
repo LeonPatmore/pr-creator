@@ -157,8 +157,8 @@ def build_orchestrate_change_agent(
                 "- Use 'repo:OWNER/REPO' to search within a specific repository",
                 "- Use 'path:DIRECTORY' to limit search to a specific directory",
                 "- NEVER combine org and repo as 'org:OWNER/REPO' - this is invalid syntax",
-                "- Example valid queries: 'org:MoneyLion repo:infrastructure', 'repo:MoneyLion/infrastructure'",
-                "- Example invalid queries: 'org:MoneyLion/infrastructure' (will fail with 422 error)",
+                "- Example valid queries: 'org:acme-corp repo:infrastructure', 'repo:acme-corp/infrastructure'",
+                "- Example invalid queries: 'org:acme-corp/infrastructure' (will fail with 422 error)",
                 "",
             ]
         )
