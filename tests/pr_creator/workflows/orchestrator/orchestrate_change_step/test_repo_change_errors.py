@@ -5,7 +5,8 @@ from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
     OrchestratorResponse,
 )
 from pr_creator.workflows.orchestrator.orchestrate_change_step.node import (
-    OrchestrateChange,
+    orchestrate_change_step,
+    orchestrate_change_discovery_mode,
 )
 from pr_creator.workflows.orchestrator.state import OrchestratorState
 
@@ -55,13 +56,14 @@ async def test_orchestrate_change_catches_repo_change_exception_and_returns_erro
         _fake_build_orchestrate_change_agent,
     )
 
-    node = OrchestrateChange(repo_url="https://github.com/example/example")
-
+    # Create a mock StepContext
     class _Ctx:
-        def __init__(self, state):
+        def __init__(self, state, inputs):
             self.state = state
+            self.inputs = inputs
 
-    await node.run(_Ctx(state))  # type: ignore[arg-type]
+    ctx = _Ctx(state, "https://github.com/example/example")
+    await orchestrate_change_step(ctx)  # type: ignore[arg-type]
 
     # Tool failure should be recorded as orchestrator_errors, not a created PR.
     assert state.created_prs == []
@@ -101,13 +103,14 @@ async def test_orchestrate_change_catches_mcp_tool_exception(monkeypatch, tmp_pa
         _fake_build_orchestrate_change_agent,
     )
 
-    node = OrchestrateChange(repo_url=None)
-
+    # Create a mock StepContext for discovery mode
     class _Ctx:
-        def __init__(self, state):
+        def __init__(self, state, inputs=None):
             self.state = state
+            self.inputs = inputs
 
-    await node.run(_Ctx(state))  # type: ignore[arg-type]
+    ctx = _Ctx(state, None)
+    await orchestrate_change_discovery_mode(ctx)  # type: ignore[arg-type]
 
     # MCP tool failure should be recorded as orchestrator_errors
     assert state.created_prs == []

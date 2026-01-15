@@ -35,12 +35,6 @@ RepoChangeTool = Callable[[str, str], Awaitable[ChangeAgentResponse]]
 
 
 def _load_mcp_toolsets(mcp_config_path: Optional[Path]) -> list:
-    """
-    Load MCP servers from a configuration file.
-
-    Returns a list of MCP toolsets that can be passed to a pydantic-ai Agent.
-    Returns an empty list if no config is provided or if loading fails.
-    """
     if not mcp_config_path:
         return []
 
@@ -88,6 +82,7 @@ def build_orchestrate_change_agent(
 
     If mcp_config_path is provided, loads MCP servers from the config file and adds them
     as toolsets to the agent, enabling it to access external resources (e.g., GitHub repos).
+    Each parallel agent gets its own MCP server instance.
 
     If github_default_org is provided, includes it as context in the system prompt to help
     the agent construct proper repository URLs when discovering repositories.
@@ -97,7 +92,7 @@ def build_orchestrate_change_agent(
 
     model = os.environ.get("ORCHESTRATOR_MODEL", "openai:gpt-5.2")
 
-    # Load MCP servers if config is provided
+    # Load MCP servers (each agent gets its own instance)
     toolsets = _load_mcp_toolsets(mcp_config_path)
 
     # Build system prompt based on whether MCP tools are available

@@ -6,7 +6,7 @@ from pathlib import Path
 
 class ReviewAgent(ABC):
     @abstractmethod
-    def review(
+    async def review(
         self,
         repo_path: Path,
         *,

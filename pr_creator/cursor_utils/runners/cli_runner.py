@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -179,7 +180,7 @@ class CLICursorRunner:
     ) -> CursorHintPaths:
         return CursorHintPaths(repo_dir=repo_abs, context_dirs=context_roots)
 
-    def run_prompt(
+    async def run_prompt(
         self,
         prompt: str,
         *,
@@ -245,9 +246,10 @@ class CLICursorRunner:
             runner="cli", intent=intent, repo_abs=repo_abs
         )
 
-        # For interactive visibility, stream to stdout when requested (and still capture).
+        # Offload blocking subprocess calls to thread pool to avoid blocking event loop
         if stream_partial_output:
-            return _run_streaming_process(
+            return await asyncio.to_thread(
+                _run_streaming_process,
                 command,
                 cwd=repo_abs or None,
                 env=env_vars,
@@ -255,13 +257,16 @@ class CLICursorRunner:
                 output_log_path=str(output_log.path) if output_log else None,
             )
 
-        result = subprocess.run(
-            command,
-            cwd=repo_abs or None,
-            env=env_vars,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        append_output_log(output_log, result.stdout or "")
-        return result.stdout
+        def _run_subprocess():
+            result = subprocess.run(
+                command,
+                cwd=repo_abs or None,
+                env=env_vars,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            append_output_log(output_log, result.stdout or "")
+            return result.stdout
+
+        return await asyncio.to_thread(_run_subprocess)

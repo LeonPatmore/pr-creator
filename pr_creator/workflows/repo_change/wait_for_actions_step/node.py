@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
+from functools import partial
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
@@ -63,8 +65,15 @@ class WaitForActions(BaseNode):
         )
 
         expected_head_sha = ctx.state.created_pr_pushed_sha
-        ok, message = wait_for_ci(
-            pr_url, token=token, cfg=cfg, expected_head_sha=expected_head_sha
+        # CI polling does network + sleeps (blocking); offload so repo workflows can run in parallel.
+        ok, message = await asyncio.to_thread(
+            partial(
+                wait_for_ci,
+                pr_url,
+                token=token,
+                cfg=cfg,
+                expected_head_sha=expected_head_sha,
+            )
         )
         if ok:
             logger.info("[ci] %s", message)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -205,13 +206,14 @@ class ApplyChanges(BaseNode):
             review_feedback=ctx.state.review_pending.pop(self.repo_url, "").strip(),
         )
 
-        _agent.run(
+        # Change agent runs Cursor CLI asynchronously
+        await _agent.run(
             path,
             prompt,
             context_roots=ctx.state.context_roots,
             secrets=ctx.state.change_agent_secrets,
         )
-        _post_apply_guardrails(Path(path))
+        await asyncio.to_thread(_post_apply_guardrails, Path(path))
         ctx.state.processed.append(self.repo_url)
 
         from pr_creator.workflows.repo_change.review_step.node import ReviewChanges

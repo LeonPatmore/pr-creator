@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import docker
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
+
+import docker
 
 from pr_creator.cursor_utils.config import (
     get_cursor_env_vars,
@@ -64,7 +66,7 @@ class DockerCursorRunner:
             repo_dir=REPO_DIR if repo_abs else None, context_dirs=context_dirs
         )
 
-    def run_prompt(
+    async def run_prompt(
         self,
         prompt: str,
         *,
@@ -113,18 +115,22 @@ class DockerCursorRunner:
             runner="docker", intent=intent, repo_abs=repo_abs
         )
 
-        output_bytes = self._client.containers.run(
-            image,
-            command=command,
-            volumes=volumes or {},
-            working_dir=workdir,
-            environment=env_vars,
-            remove=remove,
-        )
-        output = (
-            output_bytes.decode("utf-8")
-            if isinstance(output_bytes, bytes)
-            else str(output_bytes)
-        )
-        append_output_log(output_log, output or "")
-        return output
+        # Offload blocking subprocess call to thread pool to avoid blocking event loop
+        def _run_docker():
+            output_bytes = self._client.containers.run(
+                image,
+                command=command,
+                volumes=volumes or {},
+                working_dir=workdir,
+                environment=env_vars,
+                remove=remove,
+            )
+            output = (
+                output_bytes.decode("utf-8")
+                if isinstance(output_bytes, bytes)
+                else str(output_bytes)
+            )
+            append_output_log(output_log, output or "")
+            return output
+
+        return await asyncio.to_thread(_run_docker)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
+from functools import partial
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
@@ -19,13 +21,17 @@ class SubmitChanges(BaseNode):
         logger.info("Submitting changes for %s at %s", self.repo_url, path)
         # Resolve submitter at runtime; token is loaded once at CLI and threaded via state.
         submitter = get_submitter(github_token=ctx.state.github_token)
-        result = submitter.submit(
-            path,
-            change_prompt=ctx.state.prompt,
-            change_id=ctx.state.change_id,
-            branch=ctx.state.branches.get(self.repo_url),
-            pr_title=ctx.state.pr_titles.get(self.repo_url),
-            commit_message=ctx.state.commit_messages.get(self.repo_url),
+        # Submitting does git + network (blocking); offload so repo workflows can run in parallel.
+        result = await asyncio.to_thread(
+            partial(
+                submitter.submit,
+                path,
+                change_prompt=ctx.state.prompt,
+                change_id=ctx.state.change_id,
+                branch=ctx.state.branches.get(self.repo_url),
+                pr_title=ctx.state.pr_titles.get(self.repo_url),
+                commit_message=ctx.state.commit_messages.get(self.repo_url),
+            )
         )
         if result:
             pr_url = (result or {}).get("pr_url")

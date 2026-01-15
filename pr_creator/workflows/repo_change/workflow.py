@@ -3,6 +3,11 @@ import logging
 from pydantic_graph import Graph
 
 from pr_creator.logging_config import ensure_logging_configured
+from pr_creator.workflows.repo_change.logging_context import (
+    configure_repo_logging,
+    extract_repo_name,
+    repo_context,
+)
 from pr_creator.workflows.repo_change.state import RepoChangeState
 from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
 from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
@@ -38,7 +43,18 @@ async def run_repo_change_for_repo(
     state: RepoChangeState, *, repo_url: str
 ) -> RepoChangeState:
     ensure_logging_configured()
+    configure_repo_logging()
+
+    # Set repo context for all logs within this workflow
+    repo_name = extract_repo_name(repo_url)
+    repo_context.set(repo_name)
+
+    logger.info("Starting repo-change workflow")
+
     graph = build_repo_change_single_repo_graph()
     # Start directly at naming for the specific repo.
     result = await graph.run(start_node=GenerateNames(repo_url=repo_url), state=state)
+
+    logger.info("Completed repo-change workflow")
+
     return result.state if hasattr(result, "state") else result

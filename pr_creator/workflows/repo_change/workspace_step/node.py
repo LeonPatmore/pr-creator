@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 
@@ -16,7 +17,10 @@ class WorkspaceRepo(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         branch_name = ctx.state.branches.get(self.repo_url)
-        result = prepare_workspace(
+        # Workspace preparation does git clone/fetch (blocking I/O); offload to threads so
+        # orchestrator/repo workflows don't block the event loop.
+        result = await asyncio.to_thread(
+            prepare_workspace,
             repo=self.repo_url,
             working_dir=ctx.state.working_dir,
             github_token=ctx.state.github_token,

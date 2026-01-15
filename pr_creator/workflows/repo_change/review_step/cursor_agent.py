@@ -108,7 +108,7 @@ class CursorReviewAgent(ReviewAgent):
     def __init__(self, runner: CursorRunner | None = None) -> None:
         self._runner = runner or get_cursor_runner()
 
-    def review(
+    async def review(
         self,
         repo_path: Path,
         *,
@@ -150,7 +150,7 @@ class CursorReviewAgent(ReviewAgent):
             "- Otherwise output exactly: CHANGES_REQUIRED\\n<bullet list of required changes>\n"
         )
 
-        output = self._runner.run_prompt(
+        output = await self._runner.run_prompt(
             prompt,
             intent="review",
             repo_abs=repo_abs,

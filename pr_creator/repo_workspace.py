@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -344,28 +343,6 @@ def create_branch_from_default(
     repo.refs.set_symbolic_ref(b"HEAD", branch_ref)
 
 
-def make_readonly_best_effort(path: Path) -> None:
-    """
-    Best-effort: remove write permissions so local tools/agents are less likely
-    to mutate the planning workspace.
-    """
-    try:
-        for root, dirs, files in os.walk(path):
-            for d in dirs:
-                try:
-                    os.chmod(os.path.join(root, d), 0o555)
-                except Exception:
-                    pass
-            for f in files:
-                try:
-                    os.chmod(os.path.join(root, f), 0o444)
-                except Exception:
-                    pass
-        os.chmod(str(path), 0o555)
-    except Exception as exc:
-        logger.info("Could not chmod read-only (%s): %s", path, exc)
-
-
 def prepare_workspace(
     *,
     repo: str,
@@ -376,7 +353,6 @@ def prepare_workspace(
     change_id: Optional[str] = None,
     # Planning-mode controls:
     stable: bool = True,
-    readonly: bool = False,
 ) -> CloneResult:
     """
     Shared workspace preparation for both:
@@ -388,8 +364,6 @@ def prepare_workspace(
         local_abs = local.resolve()
         # Planning can operate directly on a plain directory (no git required).
         if branch_name is None:
-            if readonly:
-                make_readonly_best_effort(local_abs)
             return CloneResult(path=local_abs, branch="", branch_exists_remotely=False)
 
         # Change-mode on local paths is intentionally not supported yet (requires
@@ -436,8 +410,6 @@ def prepare_workspace(
         repo_obj = Repo.discover(str(target))
 
     if not is_change:
-        if readonly:
-            make_readonly_best_effort(target)
         return CloneResult(path=target, branch="", branch_exists_remotely=False)
 
     # Change mode: ensure we are on the right feature branch.

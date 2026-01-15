@@ -49,7 +49,8 @@ class OrchestratorState:
     # Stable branch naming / rollout id (propagated to repo-change workflow)
     change_id: Optional[str] = None
 
-    # MCP servers configuration
+    # MCP servers configuration (path to config file, not loaded toolsets)
+    # Each parallel agent will load its own MCP server instance from this config
     mcp_config_path: Optional[Path] = None
 
     # Orchestrator outputs

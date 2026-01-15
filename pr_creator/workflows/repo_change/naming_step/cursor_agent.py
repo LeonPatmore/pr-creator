@@ -38,7 +38,7 @@ class CursorNamingAgent(NamingAgent):
     def __init__(self, runner: CursorRunner | None = None) -> None:
         self._runner = runner or get_cursor_runner()
 
-    def generate_short_desc(self, prompt: str) -> str | None:
+    async def generate_short_desc(self, prompt: str) -> str | None:
         instruction = (
             "You are generating a short description for a change prompt.\n"
             "- Produce a single JSON object ONLY, no extra text.\n"
@@ -47,7 +47,7 @@ class CursorNamingAgent(NamingAgent):
         )
         full_prompt = f"{instruction}\n\nPrompt:\n{prompt}"
         try:
-            output = self._runner.run_prompt(
+            output = await self._runner.run_prompt(
                 full_prompt,
                 intent="naming",
                 repo_abs=None,

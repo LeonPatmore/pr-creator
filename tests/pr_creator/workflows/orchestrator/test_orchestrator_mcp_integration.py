@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -225,9 +226,24 @@ async def test_orchestrator_agent_can_list_github_repos():
         )
 
         logger.info("Running agent with GitHub repository listing prompt")
-        result = await agent.run(
-            prompt, deps=OrchestrateChangeDeps(repo_url="https://github.com/test/test")
-        )
+        # This test depends on external network calls (LLM + GitHub MCP). In practice we
+        # occasionally see transient connection issues; retry a few times before failing.
+        from pydantic_ai.exceptions import ModelAPIError
+
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                result = await agent.run(
+                    prompt,
+                    deps=OrchestrateChangeDeps(repo_url="https://github.com/test/test"),
+                )
+                break
+            except ModelAPIError as e:
+                last_err = e
+                await asyncio.sleep(1.0 * (attempt + 1))
+        else:
+            assert last_err is None
+            raise last_err
 
         # Analyze messages to extract tool usage
         messages = result.all_messages()

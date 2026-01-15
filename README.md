@@ -7,8 +7,15 @@ Simple workflow runner that clones target repos, applies changes via a change ag
 ![PR Creator Workflows](diagrams/workflow_diagram.png)
 
 The system consists of two main workflows:
-- **Orchestrator Workflow**: Manages multi-repo coordination, discovers repos, evaluates relevance
+- **Orchestrator Workflow**: Manages multi-repo coordination, discovers repos, evaluates relevance, and **processes repos in parallel** (beta pydantic-graph API)
 - **Repo Change Workflow**: Handles individual repo changes with AI review and CI integration
+
+**Parallel Processing**: When multiple repositories are provided, the orchestrator processes them concurrently with automatic resource management:
+- Relevance evaluation runs in parallel for all discovered repos
+- Repo changes (apply, review, submit) are executed in parallel with a configurable concurrency limit
+- Default limit: 3 concurrent repos (configurable via `MAX_PARALLEL_REPOS` environment variable)
+- Thread-safe state aggregation ensures reliable PR tracking across parallel executions
+- Discovery mode (no repos specified) runs sequentially for safety
 
 ### Use cases
 - **Multi-repo rollouts**: apply the same change across many repos (dependency bumps, config standardization, lint/format rules, CI updates).
@@ -106,6 +113,7 @@ Common (Docker + CLI):
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_MODEL_<INTENT>` — override model for a specific Cursor usage intent (e.g. `CURSOR_MODEL_CHANGE` to use a different model just for the change/apply agent). If unset, falls back to `CURSOR_MODEL`.
+- `CURSOR_STREAM_OUTPUT` — enable streaming cursor output to console; set to `false` to disable verbose streaming (default: `true`).
 - `CURSOR_STREAM_SHOW_THINKING` — when streaming output is enabled, include thinking output; set to `1|true|yes|on` to enable (default: off).
 - `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR` — directory to write per-run **full raw** `cursor-agent` output logs (default: `~/.pr-creator/cursor-output-logs`).
 
@@ -120,6 +128,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 
 **Orchestration**
 - `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `openai:gpt-5.2`.
+- `MAX_PARALLEL_REPOS` — maximum number of repositories to process concurrently during orchestration; default `3`. Increase for faster processing of many repos, decrease to reduce resource usage.
 
 **MCP servers (optional)**
 - `MCP_CONFIG` — path to MCP servers configuration file (JSON format). Defaults to `~/.pr-creator/mcp-servers.json` if that file exists. If provided (via env or CLI), the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.

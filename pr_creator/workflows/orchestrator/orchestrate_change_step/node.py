@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from functools import partial
-from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic_graph import BaseNode, End, GraphRunContext
+from pydantic_graph.beta import StepContext
 
+from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
     ChangeAgentResponse,
     OrchestrateChangeDeps,
@@ -18,9 +20,17 @@ from pr_creator.workflows.repo_change.workflow import run_repo_change_for_repo
 
 logger = logging.getLogger(__name__)
 
+# Concurrency limit: max number of repos processed in parallel
+# Can be controlled via environment variable
+MAX_PARALLEL_REPOS = int(os.environ.get("MAX_PARALLEL_REPOS", "3"))
+_concurrency_semaphore = asyncio.Semaphore(MAX_PARALLEL_REPOS)
+
+# Lock for thread-safe state mutations (shared state across parallel tasks)
+_state_lock = asyncio.Lock()
+
 
 async def repo_change_tool(
-    ctx: GraphRunContext, repo_url: str, prompt: str
+    ctx: StepContext, repo_url: str, prompt: str
 ) -> ChangeAgentResponse:
     """
     Implementation of the `repo_change(repo_url, prompt)` tool that the orchestrator agent calls.
@@ -69,7 +79,8 @@ async def repo_change_tool(
             f"{type(e).__name__}: {e}"
         )
         logger.exception("[orchestrator] %s", msg)
-        ctx.state.orchestrator_errors.append(msg)
+        async with _state_lock:
+            ctx.state.orchestrator_errors.append(msg)
         # Return an error response to the orchestrator agent (as tool output),
         # so it can decide how to proceed.
         return ChangeAgentResponse(
@@ -81,88 +92,194 @@ async def repo_change_tool(
         )
 
 
-@dataclass
-class OrchestrateChange(BaseNode):
+async def orchestrate_change_step(
+    ctx: StepContext[OrchestratorState, None, str | None],
+) -> None:
     """
-    AI-driven orchestration step.
+    Orchestrate change for a single repository (parallel execution).
 
-    This step is an AI agent that can "call" the repo-change workflow as a tool.
+    Input: repo_url (string) or None from parallel .map()
+    Output: None (results recorded in state)
 
-    If repo_url is None, the agent is responsible for discovering the target repository
-    using available tools (e.g., GitHub MCP tools).
+    This step runs in parallel for each relevant repo, with concurrency control.
+    Each parallel execution gets its own MCP server instance.
+
+    If the input is None (irrelevant repo filtered by evaluate step), this step
+    returns immediately without processing.
     """
+    repo_url = ctx.inputs
 
-    repo_url: str | None
+    # Skip processing if repo was filtered out as irrelevant
+    if repo_url is None:
+        logger.debug(
+            "[orchestrator] skipping None input (irrelevant repo filtered out)"
+        )
+        return
 
-    async def run(self, ctx: GraphRunContext) -> BaseNode | End:
+    # Acquire semaphore for concurrency control
+    async with _concurrency_semaphore:
+        logger.info(
+            f"[orchestrator] processing {repo_url} "
+            f"(active: {MAX_PARALLEL_REPOS - _concurrency_semaphore._value}/{MAX_PARALLEL_REPOS})"
+        )
+
         bound_repo_change_tool = partial(repo_change_tool, ctx)
 
+        import time
+
+        start_build = time.time()
+        logger.info(
+            "[orchestrator] building agent for %s (MCP config: %s)",
+            repo_url,
+            "enabled" if ctx.state.mcp_config_path else "disabled",
+        )
         agent, tool_called = build_orchestrate_change_agent(
             repo_change_tool=bound_repo_change_tool,
             mcp_config_path=ctx.state.mcp_config_path,
             github_default_org=ctx.state.github_default_org,
         )
+        logger.info(
+            "[orchestrator] agent built for %s (took %.2fs)",
+            repo_url,
+            time.time() - start_build,
+        )
 
-        # Build user prompt with appropriate prefix based on whether repo is specified
-        if self.repo_url:
-            user_prompt = (
-                f"This change prompt applies to the following repo: {self.repo_url}\n\n"
-                f"Base request:\n{ctx.state.prompt.strip()}\n"
-            )
-        else:
-            user_prompt = (
-                "Target repo is not defined, you should discover it with any available tools or context. "
-                "For example, you can use github tools to search for the relevant repository.\n\n"
-                f"Base request:\n{ctx.state.prompt.strip()}\n"
-            )
+        # Build user prompt for this specific repo
+        user_prompt = (
+            f"This change prompt applies to the following repo: {repo_url}\n\n"
+            f"Base request:\n{ctx.state.prompt.strip()}\n"
+        )
 
         try:
+            start_run = time.time()
+            logger.info("[orchestrator] calling agent.run() for %s", repo_url)
             result = await agent.run(
-                user_prompt, deps=OrchestrateChangeDeps(repo_url=self.repo_url or "")
+                user_prompt, deps=OrchestrateChangeDeps(repo_url=repo_url)
+            )
+            logger.info(
+                "[orchestrator] agent.run() completed for %s (took %.2fs)",
+                repo_url,
+                time.time() - start_run,
             )
             response: OrchestratorResponse = result.output
         except Exception as e:
-            error_msg = f"Orchestrator agent failed: {type(e).__name__}: {e}"
-            logger.error("[orchestrator] %s", error_msg)
-            ctx.state.orchestrator_errors.append(error_msg)
-            # Skip to next repo (or end workflow if no more repos)
-            from pr_creator.workflows.orchestrator.next_repo_step.node import (
-                NextRepoOrchestrator,
+            error_msg = (
+                f"Orchestrator agent failed for {repo_url}: {type(e).__name__}: {e}"
             )
+            logger.error("[orchestrator] %s", error_msg)
+            async with _state_lock:
+                ctx.state.orchestrator_errors.append(error_msg)
+            return
 
-            return NextRepoOrchestrator()
-
-        # Check if the agent returned an error (e.g., unable to determine target repo)
+        # Check if the agent returned an error
         if response.error:
             logger.error(
-                "[orchestrator] agent returned error: %s",
+                "[orchestrator] agent returned error for %s: %s",
+                repo_url,
                 response.error,
             )
-            ctx.state.orchestrator_errors.append(response.error)
-            # Skip to next repo (or end workflow if no more repos)
-            from pr_creator.workflows.orchestrator.next_repo_step.node import (
-                NextRepoOrchestrator,
-            )
-
-            return NextRepoOrchestrator()
+            async with _state_lock:
+                ctx.state.orchestrator_errors.append(response.error)
+            return
 
         results = response.results
 
         # Enforce the contract: changes should only happen through the repo_change tool.
-        # If the agent didn't call it, results will typically be empty.
         if not tool_called["called"] and results:
             logger.warning(
-                "[orchestrator] agent returned %d PRs without calling repo_change tool",
+                "[orchestrator] agent returned %d PRs without calling repo_change tool for %s",
                 len(results),
+                repo_url,
             )
 
-        # Aggregate tool output into orchestrator state.
+        # Aggregate tool output into orchestrator state (thread-safe).
+        async with _state_lock:
+            for r in results:
+                # Record tool-level failures.
+                if r.error:
+                    ctx.state.orchestrator_errors.append(r.error)
+                    continue
+                # Record successful PRs in the orchestrator rollup.
+                if r.pr_url:
+                    ctx.state.created_prs.append(
+                        {
+                            "repo_url": r.repo_url,
+                            "branch": r.branch or "",
+                            "pr_url": r.pr_url,
+                            "pushed_sha": r.pushed_sha,
+                        }
+                    )
+
+
+async def orchestrate_change_discovery_mode(
+    ctx: StepContext[OrchestratorState, None, None],
+) -> None:
+    """
+    Orchestrate change in discovery mode (no repos specified).
+
+    The orchestrator agent will discover the target repository using available tools.
+    This runs sequentially (not parallel) since we don't know the target repos upfront.
+    """
+    logger.info("[orchestrator] discovery mode: orchestrator will discover target repo")
+
+    bound_repo_change_tool = partial(repo_change_tool, ctx)
+
+    logger.info(
+        "[orchestrator] building agent for discovery mode (MCP config: %s)",
+        "enabled" if ctx.state.mcp_config_path else "disabled",
+    )
+    agent, tool_called = build_orchestrate_change_agent(
+        repo_change_tool=bound_repo_change_tool,
+        mcp_config_path=ctx.state.mcp_config_path,
+        github_default_org=ctx.state.github_default_org,
+    )
+
+    # Build user prompt without repo specification
+    user_prompt = (
+        "Target repo is not defined, you should discover it with any available tools or context. "
+        "For example, you can use github tools to search for the relevant repository.\n\n"
+        f"Base request:\n{ctx.state.prompt.strip()}\n"
+    )
+
+    try:
+        logger.info("[orchestrator] calling agent.run() for discovery mode")
+        result = await agent.run(user_prompt, deps=OrchestrateChangeDeps(repo_url=""))
+        logger.info("[orchestrator] agent.run() completed for discovery mode")
+        response: OrchestratorResponse = result.output
+    except Exception as e:
+        error_msg = (
+            f"Orchestrator agent failed in discovery mode: {type(e).__name__}: {e}"
+        )
+        logger.error("[orchestrator] %s", error_msg)
+        async with _state_lock:
+            ctx.state.orchestrator_errors.append(error_msg)
+        return
+
+    # Check if the agent returned an error
+    if response.error:
+        logger.error(
+            "[orchestrator] agent returned error in discovery mode: %s",
+            response.error,
+        )
+        async with _state_lock:
+            ctx.state.orchestrator_errors.append(response.error)
+        return
+
+    results = response.results
+
+    # Enforce the contract
+    if not tool_called["called"] and results:
+        logger.warning(
+            "[orchestrator] agent returned %d PRs without calling repo_change tool",
+            len(results),
+        )
+
+    # Aggregate tool output into orchestrator state (thread-safe)
+    async with _state_lock:
         for r in results:
-            # Record tool-level failures.
             if r.error:
                 ctx.state.orchestrator_errors.append(r.error)
                 continue
-            # Record successful PRs in the orchestrator rollup.
             if r.pr_url:
                 ctx.state.created_prs.append(
                     {
@@ -172,9 +289,3 @@ class OrchestrateChange(BaseNode):
                         "pushed_sha": r.pushed_sha,
                     }
                 )
-
-        from pr_creator.workflows.orchestrator.next_repo_step.node import (
-            NextRepoOrchestrator,
-        )
-
-        return NextRepoOrchestrator()

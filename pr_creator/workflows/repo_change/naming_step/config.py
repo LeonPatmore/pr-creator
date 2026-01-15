@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-DEFAULT_NAMING_MAX_ATTEMPTS = 2
+DEFAULT_NAMING_MAX_ATTEMPTS = 3
 
 
 def get_naming_max_attempts() -> int:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 from dataclasses import dataclass
@@ -26,7 +27,8 @@ class CleanupRepo(BaseNode):
         path = ctx.state.cloned.get(self.repo_url)
         if path:
             try:
-                shutil.rmtree(path, ignore_errors=True)
+                # Repo cleanup can be slow on large working trees; offload to avoid blocking.
+                await asyncio.to_thread(shutil.rmtree, path, ignore_errors=True)
                 logger.info("Cleaned up cloned repo at %s", path)
             except Exception as exc:
                 logger.warning("Failed to clean up %s: %s", path, exc)

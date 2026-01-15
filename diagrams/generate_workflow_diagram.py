@@ -9,36 +9,50 @@ from graphviz import Digraph
 
 
 def add_orchestrator_nodes(graph):
-    graph.node(
-        "init", "InitOrchestrator\n\n• Set defaults\n• Load prompts\n• Load secrets"
-    )
+    graph.node("init", "init_step\n\n• Set defaults\n• Load prompts\n• Load secrets")
     graph.node(
         "discover",
-        "DiscoverReposOrchestrator\n\n• Resolve repo list\n• Query Datadog if needed",
-    )
-    graph.node(
-        "next_repo", "NextRepoOrchestrator\n\n• Pop next repo\n• End if no repos left"
+        (
+            "discover_repos_step\n\n• Resolve repo list\n"
+            "• Query Datadog if needed\n• Return mode & repos"
+        ),
     )
     graph.node(
         "evaluate",
-        "EvaluateRelevanceOrchestrator\n\n• Clone for planning\n• AI evaluates relevance\n• Cache decision",
+        (
+            "evaluate_relevance_step\n\n• Clone for planning\n"
+            "• AI evaluates relevance\n• Cache decision\n\n[PARALLEL]"
+        ),
+        fillcolor="#ffeb3b",
     )
     graph.node(
         "orchestrate",
-        "OrchestrateChange\n\n• AI agent plans change\n• Calls repo_change tool\n• Records PR results",
+        (
+            "orchestrate_change_step\n\n• AI agent plans change\n"
+            "• Calls repo_change tool\n• Records PR results\n\n[PARALLEL + SEMAPHORE]"
+        ),
+        fillcolor="#ffeb3b",
+    )
+    graph.node(
+        "orchestrate_discovery",
+        (
+            "orchestrate_change_discovery_mode\n\n• AI discovers target repo\n"
+            "• Calls repo_change tool\n• Records PR results\n\n[SEQUENTIAL]"
+        ),
     )
 
 
 def add_orchestrator_edges(graph):
     graph.edge("init", "discover")
-    graph.edge("discover", "next_repo", label="repos found")
+    graph.edge("discover", "evaluate", label="has repos\n(parallel .map())")
     graph.edge(
-        "discover", "orchestrate", label="no repos\n(MCP discovery)", style="dashed"
+        "discover",
+        "orchestrate_discovery",
+        label="no repos\n(discovery mode)",
+        style="dashed",
     )
-    graph.edge("next_repo", "evaluate", label="has repo")
-    graph.edge("evaluate", "orchestrate", label="relevant")
-    graph.edge("evaluate", "next_repo", label="not relevant", style="dashed")
-    graph.edge("orchestrate", "next_repo", label="done")
+    graph.edge("evaluate", "orchestrate", label="relevant\n(parallel .map())")
+    # Note: irrelevant repos filtered out (return None)
 
 
 def add_repo_change_nodes(graph):

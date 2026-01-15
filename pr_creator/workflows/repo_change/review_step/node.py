@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
@@ -41,8 +42,8 @@ class ReviewChanges(BaseNode):
             ctx.state.review_attempts.get(self.repo_url, 0),
         )
 
-        needs_changes, feedback = _agent.review(
-            path,
+        needs_changes, feedback = await _agent.review(
+            Path(path),
             context_roots=ctx.state.context_roots,
             task_prompt=ctx.state.prompt,
             secrets=ctx.state.change_agent_secrets,

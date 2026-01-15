@@ -4,6 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from pr_creator.cursor_utils.config import should_stream_cursor_output
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 
 DEFAULT_AGENT = "cursor"
@@ -11,7 +12,7 @@ DEFAULT_AGENT = "cursor"
 
 class ChangeAgent(ABC):
     @abstractmethod
-    def run(
+    async def run(
         self,
         repo_path: Path,
         prompt: str,
@@ -27,7 +28,7 @@ class CursorChangeAgent(ChangeAgent):
     def __init__(self, runner: CursorRunner | None = None) -> None:
         self._runner = runner or get_cursor_runner()
 
-    def run(
+    async def run(
         self,
         repo_path: Path,
         prompt: str,
@@ -81,6 +82,12 @@ class CursorChangeAgent(ChangeAgent):
             "- Do NOT create pull requests\n"
             "- Do NOT stage changes with git add\n"
             "\n"
+            "# MINIMAL CHANGES - CRITICAL\n"
+            "\n"
+            "Do NOT make changes unless they are required.\n"
+            "Do NOT make changes which are not relevant to the task.\n"
+            "Keep changes minimal.\n"
+            "\n"
             "# CODE QUALITY CONSTRAINTS\n"
             "\n"
             "When making changes:\n"
@@ -109,14 +116,14 @@ class CursorChangeAgent(ChangeAgent):
             "# TASK\n"
             "\n" + (prompt or "")
         )
-        self._runner.run_prompt(
+        await self._runner.run_prompt(
             guarded_prompt,
             intent="change",
             remove=False,
             repo_abs=repo_abs,
             context_roots=context_roots,
             include_repo_hint=True,
-            stream_partial_output=True,
+            stream_partial_output=should_stream_cursor_output(),
             extra_env=secrets or {},
         )
 

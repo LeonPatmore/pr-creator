@@ -169,9 +169,38 @@ def main() -> None:
         "created_prs": final_state.created_prs,
         "orchestrator_errors": final_state.orchestrator_errors,
     }
+    
+    # Log formatted summary
+    print("\n" + "=" * 80)
+    print("ORCHESTRATOR WORKFLOW SUMMARY")
+    print("=" * 80)
+    
+    if final_state.created_prs:
+        print(f"\n✓ Successfully created {len(final_state.created_prs)} PR(s):")
+        for pr in final_state.created_prs:
+            repo_name = pr["repo_url"].split("/")[-1]
+            print(f"  • {repo_name}")
+            print(f"    Branch:  {pr['branch']}")
+            print(f"    PR URL:  {pr['pr_url']}")
+            print(f"    SHA:     {pr['pushed_sha'][:12]}")
+    else:
+        print("\n✗ No PRs created")
+    
+    if final_state.irrelevant:
+        print(f"\n⊘ Filtered {len(final_state.irrelevant)} irrelevant repo(s):")
+        for repo in final_state.irrelevant:
+            repo_name = repo.split("/")[-1]
+            print(f"  • {repo_name}")
+    
     if final_state.orchestrator_errors:
+        print(f"\n✗ Encountered {len(final_state.orchestrator_errors)} error(s):")
         for error in final_state.orchestrator_errors:
+            print(f"  • {error}")
             logger.error("Orchestrator error: %s", error)
+    
+    print("\n" + "=" * 80)
+    
+    # Also output raw JSON for machine consumption
     print(json.dumps(summary))
 
 

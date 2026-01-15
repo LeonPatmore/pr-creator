@@ -25,13 +25,16 @@ class CursorRunner(Protocol):
     - `context_roots`: absolute host paths to extra read-only context dirs (may be empty).
 
     Docker mounts these into container paths; CLI uses host paths directly.
+
+    The `run_prompt()` method is async because cursor-agent execution is blocking I/O
+    that must be offloaded to avoid blocking the event loop.
     """
 
     def hint_paths(
         self, *, repo_abs: str | None, context_roots: list[str]
     ) -> CursorHintPaths: ...
 
-    def run_prompt(
+    async def run_prompt(
         self,
         prompt: str,
         *,

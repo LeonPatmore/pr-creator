@@ -63,7 +63,7 @@ class GenerateNames(BaseNode):
             attempts,
         )
 
-        short_desc = _agent.generate_short_desc(ctx.state.prompt)
+        short_desc = await _agent.generate_short_desc(ctx.state.prompt)
 
         if short_desc is None:
             if attempts < max_attempts:
