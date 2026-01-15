@@ -12,6 +12,8 @@ import zipfile
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from pr_creator.retry_utils import retry_on_exception
+
 logger = logging.getLogger(__name__)
 
 _PR_URL_RE = re.compile(
@@ -78,26 +80,36 @@ def _request(
     token: Optional[str],
     accept: str = "application/vnd.github+json",
     timeout: int = 30,
+    max_retries: int = 3,
 ) -> Tuple[int, Dict[str, str], bytes]:
-    headers = {"Accept": accept, "User-Agent": "pr-creator"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    opener = urllib.request.build_opener(_NoRedirect)
-    try:
-        with opener.open(req, timeout=timeout) as resp:
-            status = getattr(resp, "status", 200)
-            hdrs = {k: v for k, v in resp.headers.items()}
-            body = resp.read()
-            return status, hdrs, body
-    except urllib.error.HTTPError as e:
-        body = e.read() if hasattr(e, "read") else b""
-        hdrs = (
-            {k: v for k, v in getattr(e, "headers", {}).items()}
-            if getattr(e, "headers", None)
-            else {}
-        )
-        return int(getattr(e, "code", 500)), hdrs, body
+    def _do_request() -> Tuple[int, Dict[str, str], bytes]:
+        headers = {"Accept": accept, "User-Agent": "pr-creator"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(url, headers=headers)
+        opener = urllib.request.build_opener(_NoRedirect)
+
+        try:
+            with opener.open(req, timeout=timeout) as resp:
+                status = getattr(resp, "status", 200)
+                hdrs = {k: v for k, v in resp.headers.items()}
+                body = resp.read()
+                return status, hdrs, body
+        except urllib.error.HTTPError as e:
+            body = e.read() if hasattr(e, "read") else b""
+            hdrs = (
+                {k: v for k, v in getattr(e, "headers", {}).items()}
+                if getattr(e, "headers", None)
+                else {}
+            )
+            return int(getattr(e, "code", 500)), hdrs, body
+
+    return retry_on_exception(
+        _do_request,
+        max_retries=max_retries,
+        exceptions=(urllib.error.URLError,),
+        log_prefix=f"[gh-api] request to {url}",
+    )
 
 
 def _get_json(url: str, *, token: str) -> Dict[str, Any]:
@@ -461,6 +473,19 @@ def wait_for_ci(
                 f"{grace_s}s but no checks/statuses were found for {pr_url}",
             )
 
+        # Fail fast: if any checks have failed, exit immediately even if others are pending
+        if check_runs and failed:
+            snippet = fetch_failed_logs_snippet(
+                owner, repo, failed, token=token, cfg=cfg
+            )
+            return False, (
+                "CI failed for this PR.\n\n"
+                f"- PR: {pr_url}\n"
+                f"- head_sha: {sha}\n"
+                f"- summary: {last_counts}\n\n" + (snippet or "No logs available.")
+            )
+
+        # Emit heartbeat if checks are still pending
         if pending or combined_state == "pending":
             _heartbeat(
                 pr_url=pr_url,
@@ -471,21 +496,11 @@ def wait_for_ci(
                 failed=failed,
             )
 
+        # All checks complete (no pending, no failures)
         if not pending:
-            # If there are any checks, require no failures. If there are no checks,
-            # treat combined status as the source of truth.
-            if check_runs and not failed:
+            # If there are any checks and none failed, success
+            if check_runs:
                 return True, f"[ci] all checks passed for {pr_url} ({last_counts})"
-            if check_runs and failed:
-                snippet = fetch_failed_logs_snippet(
-                    owner, repo, failed, token=token, cfg=cfg
-                )
-                return False, (
-                    "CI failed for this PR.\n\n"
-                    f"- PR: {pr_url}\n"
-                    f"- head_sha: {sha}\n"
-                    f"- summary: {last_counts}\n\n" + (snippet or "No logs available.")
-                )
             # No check runs: rely on combined status.
             if combined_state == "success":
                 return (
