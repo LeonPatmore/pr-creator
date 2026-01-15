@@ -6,11 +6,16 @@ from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
+from pr_creator.workflows.repo_change.naming_step.config import get_naming_max_attempts
 from pr_creator.workflows.repo_change.naming_step.naming_agents import get_naming_agent
 
 logger = logging.getLogger(__name__)
 
 _agent = get_naming_agent()
+
+
+def _max_naming_attempts() -> int:
+    return get_naming_max_attempts()
 
 
 def _truncate_with_ellipsis(text: str, max_len: int) -> str:
@@ -47,7 +52,35 @@ class GenerateNames(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         change_id = ctx.state.change_id
-        short_desc = _agent.generate_short_desc(ctx.state.prompt) or "auto-change"
+
+        attempts = ctx.state.naming_attempts.get(self.repo_url, 0)
+        max_attempts = _max_naming_attempts()
+
+        logger.info(
+            "[naming] agent=%s max_attempts=%s current_attempts=%s",
+            type(_agent).__name__,
+            max_attempts,
+            attempts,
+        )
+
+        short_desc = _agent.generate_short_desc(ctx.state.prompt)
+
+        if short_desc is None:
+            if attempts < max_attempts:
+                ctx.state.naming_attempts[self.repo_url] = attempts + 1
+                logger.warning(
+                    "[naming] generation failed; retrying (attempt %s)",
+                    attempts + 1,
+                )
+                return GenerateNames(repo_url=self.repo_url)
+
+            logger.warning(
+                "[naming] generation failed after %s attempt(s) (max=%s); using fallback",
+                attempts,
+                max_attempts,
+            )
+            short_desc = "auto-change"
+
         slug_raw = _slugify(short_desc)
 
         # Keep branch slugs short and stable by default.

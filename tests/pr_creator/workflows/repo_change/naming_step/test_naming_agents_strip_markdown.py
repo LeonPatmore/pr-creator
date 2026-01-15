@@ -1,6 +1,6 @@
 """Tests for the _strip_markdown_code_fences function in naming_agents."""
 
-from pr_creator.workflows.repo_change.naming_step.naming_agents import (
+from pr_creator.workflows.repo_change.naming_step.cursor_agent import (
     _strip_markdown_code_fences,
 )
 

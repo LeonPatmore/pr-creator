@@ -90,7 +90,8 @@ class CursorChangeAgent(ChangeAgent):
             "\n"
             "# CODE COMMENTS - CRITICAL\n"
             "\n"
-            "Do NOT add excessive comments. Only add code comments when they provide essential non-obvious information.\n"
+            "Do NOT add excessive comments. Only add code comments when they "
+            "provide essential non-obvious information.\n"
             "\n"
             "Avoid redundant comments that simply restate what the code does.\n"
             "\n"
@@ -101,7 +102,7 @@ class CursorChangeAgent(ChangeAgent):
             "- References to external documentation or tickets\n"
             "\n"
             "Bad comments to avoid:\n"
-            "- Restating obvious operations (e.g., \"# Set the value to x\")\n"
+            '- Restating obvious operations (e.g., "# Set the value to x")\n'
             "- Describing what can be clearly understood from well-named variables/functions\n"
             "- Commenting every single line or block\n"
             "\n"
