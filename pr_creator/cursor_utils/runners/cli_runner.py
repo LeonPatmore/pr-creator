@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 _TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
 
 
+def _get_timeout_seconds() -> float | None:
+    raw = (os.environ.get("CURSOR_AGENT_TIMEOUT_SECONDS") or "").strip()
+    if not raw:
+        return 600.0
+    try:
+        v = float(raw)
+    except Exception:
+        return 600.0
+    return v if v > 0 else None
+
+
 def _show_thinking(env: dict[str, str]) -> bool:
     return (env.get("CURSOR_STREAM_SHOW_THINKING") or "").strip().lower() in _TRUTHY
 
@@ -245,6 +256,7 @@ class CLICursorRunner:
         output_log = resolve_cursor_output_log(
             runner="cli", intent=intent, repo_abs=repo_abs
         )
+        timeout_seconds = _get_timeout_seconds()
 
         # Offload blocking subprocess calls to thread pool to avoid blocking event loop
         if stream_partial_output:
@@ -265,6 +277,7 @@ class CLICursorRunner:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=timeout_seconds,
             )
             append_output_log(output_log, result.stdout or "")
             return result.stdout

@@ -23,6 +23,3 @@ def get_submitter(
         name or os.environ.get("SUBMIT_CHANGE") or DEFAULT_SUBMITTER
     ).lower()
     return _get_submitter_cached(submitter_name, github_token)
-
-
-__all__ = ["SubmitChange", "GithubSubmitter", "get_submitter"]

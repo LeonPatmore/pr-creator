@@ -28,7 +28,6 @@ def build_orchestrator_graph() -> GraphBuilder:
     - discover_repos_step: Discover/normalize repo URLs, returns list of repos
     - Map over repos for parallel processing (evaluate → orchestrate)
     - Join all parallel results before ending
-    - Empty list gracefully results in no processing
     """
     g = GraphBuilder(
         state_type=OrchestratorState,

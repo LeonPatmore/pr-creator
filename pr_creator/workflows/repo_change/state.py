@@ -47,6 +47,8 @@ class RepoChangeState:
     review_pending: Dict[str, str] = field(default_factory=dict)
     # Number of review->apply retries attempted per repo_url.
     review_attempts: Dict[str, int] = field(default_factory=dict)
+    # Number of within-step review retries attempted per repo_url (unexpected errors).
+    review_step_attempts: Dict[str, int] = field(default_factory=dict)
     # Number of naming generation attempts per repo_url.
     naming_attempts: Dict[str, int] = field(default_factory=dict)
     # Number of apply (change agent) attempts per repo_url.

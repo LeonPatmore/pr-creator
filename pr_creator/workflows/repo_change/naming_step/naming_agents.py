@@ -15,10 +15,3 @@ def get_naming_agent(name: str | None = None) -> NamingAgent:
     if agent_name == "cursor":
         return CursorNamingAgent(get_cursor_runner())
     raise ValueError(f"Unknown naming agent: {agent_name}")
-
-
-__all__ = [
-    "NamingAgent",
-    "CursorNamingAgent",
-    "get_naming_agent",
-]

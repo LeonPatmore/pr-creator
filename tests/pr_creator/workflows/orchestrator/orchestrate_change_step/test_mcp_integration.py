@@ -71,7 +71,8 @@ def get_agent_system_prompt(mock_agent_class) -> str:
 
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
-def test_build_agent_without_mcp_config(
+@pytest.mark.anyio
+async def test_build_agent_without_mcp_config(
     mock_agent_class, mock_repo_change_tool, mock_agent_instance
 ):
     """
@@ -84,21 +85,21 @@ def test_build_agent_without_mcp_config(
     """
     mock_agent_class.return_value = mock_agent_instance
 
-    agent, tool_called = build_orchestrate_change_agent(
+    async with build_orchestrate_change_agent(
         repo_change_tool=mock_repo_change_tool, mcp_config_path=None
-    )
+    ) as (agent, tool_called):
+        assert agent is not None
+        assert tool_called == {"called": False}
 
-    assert agent is not None
-    assert tool_called == {"called": False}
+        toolsets = get_agent_toolsets(mock_agent_class)
+        assert toolsets == []
 
-    toolsets = get_agent_toolsets(mock_agent_class)
-    assert toolsets == []
-
-    logger.info("✓ Agent built without MCP config")
+        logger.info("✓ Agent built without MCP config")
 
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
-def test_build_agent_with_nonexistent_mcp_config(
+@pytest.mark.anyio
+async def test_build_agent_with_nonexistent_mcp_config(
     mock_agent_class, mock_repo_change_tool, mock_agent_instance
 ):
     """
@@ -112,22 +113,22 @@ def test_build_agent_with_nonexistent_mcp_config(
     mock_agent_class.return_value = mock_agent_instance
     nonexistent_path = Path("/tmp/nonexistent-mcp-config.json")
 
-    agent, tool_called = build_orchestrate_change_agent(
+    async with build_orchestrate_change_agent(
         repo_change_tool=mock_repo_change_tool, mcp_config_path=nonexistent_path
-    )
+    ) as (agent, tool_called):
+        assert agent is not None
+        assert tool_called == {"called": False}
 
-    assert agent is not None
-    assert tool_called == {"called": False}
+        toolsets = get_agent_toolsets(mock_agent_class)
+        assert toolsets == []
 
-    toolsets = get_agent_toolsets(mock_agent_class)
-    assert toolsets == []
-
-    logger.info("✓ Agent handled missing MCP config gracefully")
+        logger.info("✓ Agent handled missing MCP config gracefully")
 
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
 @patch("pydantic_ai.mcp.load_mcp_servers")
-def test_build_agent_with_valid_mcp_config(
+@pytest.mark.anyio
+async def test_build_agent_with_valid_mcp_config(
     mock_load_mcp_servers, mock_agent_class, mock_repo_change_tool, mock_agent_instance
 ):
     """
@@ -153,29 +154,30 @@ def test_build_agent_with_valid_mcp_config(
     config_path = create_temp_mcp_config(config)
 
     try:
-        # Mock load_mcp_servers to return mock toolset
+        # Mock load_mcp_servers to return mock toolset with async context manager support
         mock_toolset = MagicMock()
+        mock_toolset.__aenter__ = AsyncMock(return_value=mock_toolset)
+        mock_toolset.__aexit__ = AsyncMock(return_value=None)
         mock_load_mcp_servers.return_value = [mock_toolset]
 
-        agent, tool_called = build_orchestrate_change_agent(
+        async with build_orchestrate_change_agent(
             repo_change_tool=mock_repo_change_tool, mcp_config_path=config_path
-        )
+        ) as (agent, tool_called):
+            assert agent is not None
+            assert tool_called == {"called": False}
 
-        assert agent is not None
-        assert tool_called == {"called": False}
+            # Verify MCP servers were loaded
+            mock_load_mcp_servers.assert_called_once_with(str(config_path))
 
-        # Verify MCP servers were loaded
-        mock_load_mcp_servers.assert_called_once_with(str(config_path))
+            # Verify toolsets were passed to Agent
+            toolsets = get_agent_toolsets(mock_agent_class)
+            assert toolsets == [mock_toolset]
 
-        # Verify toolsets were passed to Agent
-        toolsets = get_agent_toolsets(mock_agent_class)
-        assert toolsets == [mock_toolset]
+            # Verify system prompt mentions external tools
+            system_prompt = get_agent_system_prompt(mock_agent_class)
+            assert "external tools" in system_prompt.lower()
 
-        # Verify system prompt mentions external tools
-        system_prompt = get_agent_system_prompt(mock_agent_class)
-        assert "external tools" in system_prompt.lower()
-
-        logger.info("✓ Agent loaded MCP servers successfully")
+            logger.info("✓ Agent loaded MCP servers successfully")
 
     finally:
         config_path.unlink(missing_ok=True)
@@ -183,7 +185,8 @@ def test_build_agent_with_valid_mcp_config(
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
 @patch("pydantic_ai.mcp.load_mcp_servers")
-def test_build_agent_handles_import_error(
+@pytest.mark.anyio
+async def test_build_agent_handles_import_error(
     mock_load_mcp_servers, mock_agent_class, mock_repo_change_tool, mock_agent_instance
 ):
     """
@@ -205,18 +208,17 @@ def test_build_agent_handles_import_error(
             "No module named 'pydantic_ai.mcp'"
         )
 
-        agent, tool_called = build_orchestrate_change_agent(
+        async with build_orchestrate_change_agent(
             repo_change_tool=mock_repo_change_tool, mcp_config_path=config_path
-        )
+        ) as (agent, tool_called):
+            # Agent should still be created without MCP toolsets
+            assert agent is not None
+            assert tool_called == {"called": False}
 
-        # Agent should still be created without MCP toolsets
-        assert agent is not None
-        assert tool_called == {"called": False}
+            toolsets = get_agent_toolsets(mock_agent_class)
+            assert toolsets == []
 
-        toolsets = get_agent_toolsets(mock_agent_class)
-        assert toolsets == []
-
-        logger.info("✓ Agent handled missing pydantic-ai MCP support gracefully")
+            logger.info("✓ Agent handled missing pydantic-ai MCP support gracefully")
 
     finally:
         config_path.unlink(missing_ok=True)
@@ -224,7 +226,8 @@ def test_build_agent_handles_import_error(
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
 @patch("pydantic_ai.mcp.load_mcp_servers")
-def test_build_agent_handles_invalid_config(
+@pytest.mark.anyio
+async def test_build_agent_handles_invalid_config(
     mock_load_mcp_servers, mock_agent_class, mock_repo_change_tool, mock_agent_instance
 ):
     """
@@ -246,18 +249,17 @@ def test_build_agent_handles_invalid_config(
         # Simulate exception when loading config
         mock_load_mcp_servers.side_effect = ValueError("Invalid config format")
 
-        agent, tool_called = build_orchestrate_change_agent(
+        async with build_orchestrate_change_agent(
             repo_change_tool=mock_repo_change_tool, mcp_config_path=config_path
-        )
+        ) as (agent, tool_called):
+            # Agent should still be created without MCP toolsets
+            assert agent is not None
+            assert tool_called == {"called": False}
 
-        # Agent should still be created without MCP toolsets
-        assert agent is not None
-        assert tool_called == {"called": False}
+            toolsets = get_agent_toolsets(mock_agent_class)
+            assert toolsets == []
 
-        toolsets = get_agent_toolsets(mock_agent_class)
-        assert toolsets == []
-
-        logger.info("✓ Agent handled invalid MCP config gracefully")
+            logger.info("✓ Agent handled invalid MCP config gracefully")
 
     finally:
         config_path.unlink(missing_ok=True)
@@ -265,7 +267,8 @@ def test_build_agent_handles_invalid_config(
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
 @patch("pydantic_ai.mcp.load_mcp_servers")
-def test_system_prompt_includes_mcp_instructions(
+@pytest.mark.anyio
+async def test_system_prompt_includes_mcp_instructions(
     mock_load_mcp_servers, mock_agent_class, mock_repo_change_tool
 ):
     """
@@ -287,9 +290,10 @@ def test_system_prompt_includes_mcp_instructions(
     mock_agent_class.side_effect = capture_system_prompt
 
     # Build agent without MCP
-    build_orchestrate_change_agent(
+    async with build_orchestrate_change_agent(
         repo_change_tool=mock_repo_change_tool, mcp_config_path=None
-    )
+    ):
+        pass
     prompt_without_mcp = system_prompts[-1]
 
     # Build agent with MCP
@@ -297,11 +301,15 @@ def test_system_prompt_includes_mcp_instructions(
     config_path = create_temp_mcp_config(config)
 
     try:
-        mock_load_mcp_servers.return_value = [MagicMock()]
+        mock_toolset = MagicMock()
+        mock_toolset.__aenter__ = AsyncMock(return_value=mock_toolset)
+        mock_toolset.__aexit__ = AsyncMock(return_value=None)
+        mock_load_mcp_servers.return_value = [mock_toolset]
 
-        build_orchestrate_change_agent(
+        async with build_orchestrate_change_agent(
             repo_change_tool=mock_repo_change_tool, mcp_config_path=config_path
-        )
+        ):
+            pass
         prompt_with_mcp = system_prompts[-1]
 
         # Verify prompts are different
@@ -317,7 +325,8 @@ def test_system_prompt_includes_mcp_instructions(
 
 
 @patch("pr_creator.workflows.orchestrator.orchestrate_change_step.agent.Agent")
-def test_system_prompt_includes_github_default_org(
+@pytest.mark.anyio
+async def test_system_prompt_includes_github_default_org(
     mock_agent_class, mock_repo_change_tool
 ):
     """
@@ -338,19 +347,21 @@ def test_system_prompt_includes_github_default_org(
     mock_agent_class.side_effect = capture_system_prompt
 
     # Build agent without github_default_org
-    build_orchestrate_change_agent(
+    async with build_orchestrate_change_agent(
         repo_change_tool=mock_repo_change_tool,
         mcp_config_path=None,
         github_default_org=None,
-    )
+    ):
+        pass
     prompt_without_org = system_prompts[-1]
 
     # Build agent with github_default_org
-    build_orchestrate_change_agent(
+    async with build_orchestrate_change_agent(
         repo_change_tool=mock_repo_change_tool,
         mcp_config_path=None,
         github_default_org="my-test-org",
-    )
+    ):
+        pass
     prompt_with_org = system_prompts[-1]
 
     # Verify prompts are different

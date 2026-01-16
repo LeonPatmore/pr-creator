@@ -113,7 +113,7 @@ Common (Docker + CLI):
 - `CURSOR_ENV_KEYS` — comma-separated env keys forwarded to the agent; default `CURSOR_API_KEY`.
 - `CURSOR_MODEL` — cursor model to use; default `gpt-5.2`.
 - `CURSOR_MODEL_<INTENT>` — override model for a specific Cursor usage intent (e.g. `CURSOR_MODEL_CHANGE` to use a different model just for the change/apply agent). If unset, falls back to `CURSOR_MODEL`.
-- `CURSOR_STREAM_OUTPUT` — enable streaming cursor output to console; set to `false` to disable verbose streaming (default: `true`).
+- `CURSOR_STREAM_OUTPUT` — enable streaming cursor output to console; set to `true` to enable verbose streaming (default: `false`).
 - `CURSOR_STREAM_SHOW_THINKING` — when streaming output is enabled, include thinking output; set to `1|true|yes|on` to enable (default: off).
 - `PR_CREATOR_CURSOR_OUTPUT_LOG_DIR` — directory to write per-run **full raw** `cursor-agent` output logs (default: `~/.pr-creator/cursor-output-logs`).
 
@@ -123,11 +123,13 @@ Docker runner only (`CURSOR_RUNNER=docker`):
 CLI runner only (`CURSOR_RUNNER=cli`):
 - `CURSOR_CLI_BIN` — cursor-agent binary name/path (default: `cursor-agent`).
 - `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent (default: common path of repo + context roots).
-- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: no timeout.
+- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: `600` (10 minutes). Set to `0` to disable.
 - `CURSOR_AGENT_HEARTBEAT_SECONDS` — emit a “still running” message when no output is seen for this many seconds (default: `30`).
 
 **Orchestration**
 - `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `openai:gpt-5.2`.
+- `LITELLM_API_BASE` — LiteLLM API base URL (e.g., `http://localhost:4000`). If set, the orchestrator will use LiteLLM as a proxy to access various LLM providers.
+- `LITELLM_API_KEY` — LiteLLM API key for authentication. Required when `LITELLM_API_BASE` is set.
 - `MAX_PARALLEL_REPOS` — maximum number of repositories to process concurrently during orchestration; default `3`. Increase for faster processing of many repos, decrease to reduce resource usage.
 
 **MCP servers (optional)**
@@ -176,7 +178,13 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 > **Note**: The backoff formula is `min * (base^attempt)`, capped at `max`. With the defaults above, retries occur at: 5s → 15s → 45s → 60s.
 
 **Review loop**
-- `REVIEW_MAX_ATTEMPTS` — max number of review→apply retries per repo when the review step returns `CHANGES_REQUIRED` (default: `2`).
+- `REVIEW_MAX_ATTEMPTS` — max number of review→apply retries per repo when the review step returns `CHANGES_REQUIRED` (**capped at `2`**, default: `2`).
+
+**Review step retries (unexpected errors)**
+- `REVIEW_STEP_MAX_ATTEMPTS` — max number of in-step retries when the review agent errors (default: `4`).
+- `REVIEW_STEP_BACKOFF_BASE` — exponential backoff base for review step retries (default: `3.0`).
+- `REVIEW_STEP_BACKOFF_MIN` — minimum backoff time in seconds for review step retries (default: `5.0`).
+- `REVIEW_STEP_BACKOFF_MAX` — maximum backoff time in seconds for review step retries (default: `60.0`).
 
 **CI / GitHub Actions (post-submit wait + auto-fix loop)**
 - `CI_FIX_MAX_ATTEMPTS` — max number of CI-fix→apply retries per repo when checks fail (default: `2`).

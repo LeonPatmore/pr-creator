@@ -7,6 +7,7 @@ from pathlib import Path
 from pr_creator.cursor_utils.runners import CursorRunner, get_cursor_runner
 
 from .base import ReviewAgent
+from .prompt_builder import build_review_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -117,50 +118,7 @@ class CursorReviewAgent(ReviewAgent):
         secrets: dict[str, str] | None = None,
     ) -> tuple[bool, str | None]:
         repo_abs = str(repo_path.resolve())
-        task_section = ""
-        if task_prompt and task_prompt.strip():
-            task_section = (
-                "\n"
-                "Task instructions (source of truth):\n"
-                "----\n"
-                f"{task_prompt.strip()}\n"
-                "----\n"
-            )
-
-        prompt = (
-            "You are reviewing the current repository state BEFORE submitting a PR.\n"
-            "\n"
-            "# WHAT TO REVIEW\n"
-            "\n"
-            "Review ALL changes on this branch compared to the base branch (typically main).\n"
-            "This includes:\n"
-            "1. Previously committed changes on this branch\n"
-            "2. Currently uncommitted changes (staged + unstaged + untracked)\n"
-            "\n"
-            "To see the full diff of what will be in the PR, use:\n"
-            "- `git diff origin/main...HEAD` (all committed changes on branch)\n"
-            "- `git status` and `git diff` (uncommitted changes)\n"
-            "- Or combine both views to understand the complete changeset\n"
-            "\n"
-            "Important workflow context:\n"
-            "- Do NOT require changes to be staged. The submit step will stage everything automatically.\n"
-            "- Consider the ENTIRE changeset that will be included in the PR, not just uncommitted files.\n"
-            "\n"
-            "Review rules:\n"
-            "- Treat the Task instructions (if provided below) as the source of truth.\n"
-            "- Only require changes if they are necessary for correctness, security (no leaked secrets/tokens),\n"
-            "  or to satisfy explicit requirements in the Task instructions.\n"
-            "- Do not request stylistic refactors or generic best-practice changes unless explicitly required.\n"
-            "- Example: flag unintended generated/build artifacts that got staged/committed (e.g. build outputs,\n"
-            "  dependency directories, caches). Require reverting them and/or adding correct `.gitignore` rules.\n"
-            f"{task_section}\n"
-            "You may run any relevant commands (e.g. git status, git diff, git log, tests) and read files.\n"
-            "If changes are needed before submitting, list them clearly.\n"
-            "\n"
-            "IMPORTANT OUTPUT FORMAT (no extra text):\n"
-            "- If the repo is ready, output exactly: READY_TO_COMMIT\n"
-            "- Otherwise output exactly: CHANGES_REQUIRED\\n<bullet list of required changes>\n"
-        )
+        prompt = build_review_prompt(task_prompt=task_prompt)
 
         output = await self._runner.run_prompt(
             prompt,

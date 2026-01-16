@@ -14,7 +14,8 @@ def add_orchestrator_nodes(graph):
         "discover",
         (
             "discover_repos_step\n\n• Resolve repo list\n"
-            "• Query Datadog if needed\n• Return mode & repos"
+            "• Query Datadog if needed\n"
+            "• Return repo URLs (or [None] sentinel when no repos and MCP configured)"
         ),
     )
     graph.node(
@@ -33,24 +34,11 @@ def add_orchestrator_nodes(graph):
         ),
         fillcolor="#ffeb3b",
     )
-    graph.node(
-        "orchestrate_discovery",
-        (
-            "orchestrate_change_discovery_mode\n\n• AI discovers target repo\n"
-            "• Calls repo_change tool\n• Records PR results\n\n[SEQUENTIAL]"
-        ),
-    )
 
 
 def add_orchestrator_edges(graph):
     graph.edge("init", "discover")
     graph.edge("discover", "evaluate", label="has repos\n(parallel .map())")
-    graph.edge(
-        "discover",
-        "orchestrate_discovery",
-        label="no repos\n(discovery mode)",
-        style="dashed",
-    )
     graph.edge("evaluate", "orchestrate", label="relevant\n(parallel .map())")
     # Note: irrelevant repos filtered out (return None)
 

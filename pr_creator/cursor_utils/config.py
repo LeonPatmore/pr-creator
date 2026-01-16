@@ -46,11 +46,5 @@ def get_cursor_env_vars() -> Dict[str, str]:
 
 
 def should_stream_cursor_output() -> bool:
-    """
-    Check if cursor output should be streamed to console.
-
-    Defaults to True for backward compatibility.
-    Set CURSOR_STREAM_OUTPUT=false to disable streaming.
-    """
-    value = os.environ.get("CURSOR_STREAM_OUTPUT", "true").strip().lower()
+    value = os.environ.get("CURSOR_STREAM_OUTPUT", "false").strip().lower()
     return value in ("1", "true", "yes", "on")

@@ -123,9 +123,14 @@ async def _prepare_planning_clone(
 
 
 async def evaluate_relevance_step(
-    ctx: StepContext[OrchestratorState, None, str],
+    ctx: StepContext[OrchestratorState, None, str | None],
 ) -> str | None:
     repo_url = ctx.inputs
+
+    # Allow a None sentinel to flow through the parallel pipeline. This is used
+    # to let downstream orchestration run with a no-repo prompt.
+    if repo_url is None:
+        return None
 
     if not ctx.state.relevance_prompt:
         logger.info(

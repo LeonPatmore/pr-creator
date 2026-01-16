@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -11,11 +10,6 @@ from typing import Any
 
 import pytest
 
-from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
-    build_orchestrate_change_agent,
-    OrchestrateChangeDeps,
-    OrchestratorResponse,
-)
 from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
 
@@ -182,108 +176,6 @@ def check_required_env(var_names: list[str]) -> None:
     missing = [k for k in var_names if not os.environ.get(k)]
     if missing:
         pytest.skip(f"Missing required env vars: {', '.join(missing)}")
-
-
-@pytest.mark.anyio
-async def test_orchestrator_agent_can_list_github_repos():
-    """
-    Direct test: orchestrator agent uses GitHub MCP tools to list repositories.
-
-    This test verifies that:
-    - MCP config is loaded and GitHub MCP server starts
-    - Agent can call GitHub API tools through MCP
-    - Agent successfully retrieves repository data
-    - Tool calls and responses are properly handled
-
-    Requirements:
-    - GITHUB_TOKEN env var must be set
-    - Docker must be running
-    """
-    check_required_env(["GITHUB_TOKEN"])
-
-    github_token = os.environ["GITHUB_TOKEN"]
-    mcp_config_path = create_github_mcp_config(github_token)
-
-    try:
-        # Create mock repo_change tool to track if it's called
-        repo_change_calls = []
-
-        async def mock_repo_change(repo_url: str, prompt: str):
-            repo_change_calls.append({"repo_url": repo_url, "prompt": prompt})
-            logger.info("repo_change called for %s", repo_url)
-            return []
-
-        # Build orchestrator agent with MCP integration
-        agent, _ = build_orchestrate_change_agent(
-            repo_change_tool=mock_repo_change, mcp_config_path=mcp_config_path
-        )
-
-        # Run agent with a prompt that requires GitHub API access
-        prompt = (
-            "Use GitHub API tools to list the first 3 repositories accessible "
-            "with the current token. List their names. After exploring, "
-            "return an empty list (don't call repo_change)."
-        )
-
-        logger.info("Running agent with GitHub repository listing prompt")
-        # This test depends on external network calls (LLM + GitHub MCP). In practice we
-        # occasionally see transient connection issues; retry a few times before failing.
-        from pydantic_ai.exceptions import ModelAPIError
-
-        last_err: Exception | None = None
-        for attempt in range(3):
-            try:
-                result = await agent.run(
-                    prompt,
-                    deps=OrchestrateChangeDeps(repo_url="https://github.com/test/test"),
-                )
-                break
-            except ModelAPIError as e:
-                last_err = e
-                await asyncio.sleep(1.0 * (attempt + 1))
-        else:
-            assert last_err is None
-            raise last_err
-
-        # Analyze messages to extract tool usage
-        messages = result.all_messages()
-        tool_usage = analyze_agent_messages(messages)
-
-        # Log summary
-        logger.info("Agent execution summary:")
-        logger.info("  - Messages: %d", len(messages))
-        logger.info("  - Tool calls: %d", len(tool_usage.tool_calls))
-        logger.info("  - Tool returns: %d", len(tool_usage.tool_returns))
-        logger.info("  - GitHub tools used: %d", tool_usage.github_tool_count)
-        logger.info("  - Repositories discovered: %d", len(tool_usage.unique_repos))
-        logger.info("  - repo_change calls: %d", len(repo_change_calls))
-
-        if tool_usage.unique_repos:
-            logger.info("  Discovered repositories:")
-            for repo in sorted(tool_usage.unique_repos):
-                logger.info("    - %s", repo)
-
-        # Assertions: Verify MCP integration is working
-        assert (
-            tool_usage.github_tool_count > 0
-        ), "No GitHub MCP tools used - MCP integration not working!"
-        assert (
-            len(tool_usage.unique_repos) > 0
-        ), "No repositories discovered - GitHub API not returning data!"
-        assert len(repo_change_calls) == 0, "repo_change should not have been called"
-        assert isinstance(
-            result.output, OrchestratorResponse
-        ), "Result should be OrchestratorResponse"
-        assert isinstance(result.output.results, list), "results should be a list"
-
-        logger.info(
-            "✅ MCP integration working: %d GitHub tool(s) used, %d repo(s) found",
-            tool_usage.github_tool_count,
-            len(tool_usage.unique_repos),
-        )
-
-    finally:
-        mcp_config_path.unlink(missing_ok=True)
 
 
 @pytest.mark.anyio
