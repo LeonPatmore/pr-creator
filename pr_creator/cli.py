@@ -12,6 +12,59 @@ from pr_creator.context_roots import normalize_context_roots
 logger = logging.getLogger(__name__)
 
 
+def _print_workflow_summary(final_state, summary: dict) -> None:
+    """Print a formatted summary of the orchestrator workflow results."""
+    print("\n" + "=" * 80)
+    print("ORCHESTRATOR WORKFLOW SUMMARY")
+    print("=" * 80)
+
+    if final_state.created_prs:
+        print(f"\n✓ Successfully created {len(final_state.created_prs)} PR(s):")
+        for pr in final_state.created_prs:
+            repo_name = pr["repo_url"].split("/")[-1]
+            print(f"  • {repo_name}")
+            print(f"    Branch:  {pr['branch']}")
+            print(f"    PR URL:  {pr['pr_url']}")
+
+            # Show SHA if available
+            if pr.get("pushed_sha"):
+                print(f"    SHA:     {pr['pushed_sha'][:12]}")
+
+            # Show whether changes were pushed
+            changes_pushed = pr.get(
+                "changes_pushed", True
+            )  # Default to True for backward compat
+            if not changes_pushed:
+                print("    Changes: No new changes (PR already exists)")
+
+            # Show CI status if available
+            ci_passed = pr.get("ci_passed")
+            if ci_passed is True:
+                print("    CI:      ✓ Passed")
+            elif ci_passed is False:
+                print("    CI:      ✗ Failed")
+            # If None, don't show anything (CI not waited for)
+    else:
+        print("\n✗ No PRs created")
+
+    if final_state.irrelevant:
+        print(f"\n⊘ Filtered {len(final_state.irrelevant)} irrelevant repo(s):")
+        for repo in final_state.irrelevant:
+            repo_name = repo.split("/")[-1]
+            print(f"  • {repo_name}")
+
+    if final_state.orchestrator_errors:
+        print(f"\n✗ Encountered {len(final_state.orchestrator_errors)} error(s):")
+        for error in final_state.orchestrator_errors:
+            print(f"  • {error}")
+            logger.error("Orchestrator error: %s", error)
+
+    print("\n" + "=" * 80)
+
+    # Also output raw JSON for machine consumption
+    print(json.dumps(summary))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", required=False)
@@ -169,39 +222,8 @@ def main() -> None:
         "created_prs": final_state.created_prs,
         "orchestrator_errors": final_state.orchestrator_errors,
     }
-    
-    # Log formatted summary
-    print("\n" + "=" * 80)
-    print("ORCHESTRATOR WORKFLOW SUMMARY")
-    print("=" * 80)
-    
-    if final_state.created_prs:
-        print(f"\n✓ Successfully created {len(final_state.created_prs)} PR(s):")
-        for pr in final_state.created_prs:
-            repo_name = pr["repo_url"].split("/")[-1]
-            print(f"  • {repo_name}")
-            print(f"    Branch:  {pr['branch']}")
-            print(f"    PR URL:  {pr['pr_url']}")
-            print(f"    SHA:     {pr['pushed_sha'][:12]}")
-    else:
-        print("\n✗ No PRs created")
-    
-    if final_state.irrelevant:
-        print(f"\n⊘ Filtered {len(final_state.irrelevant)} irrelevant repo(s):")
-        for repo in final_state.irrelevant:
-            repo_name = repo.split("/")[-1]
-            print(f"  • {repo_name}")
-    
-    if final_state.orchestrator_errors:
-        print(f"\n✗ Encountered {len(final_state.orchestrator_errors)} error(s):")
-        for error in final_state.orchestrator_errors:
-            print(f"  • {error}")
-            logger.error("Orchestrator error: %s", error)
-    
-    print("\n" + "=" * 80)
-    
-    # Also output raw JSON for machine consumption
-    print(json.dumps(summary))
+
+    _print_workflow_summary(final_state, summary)
 
 
 if __name__ == "__main__":

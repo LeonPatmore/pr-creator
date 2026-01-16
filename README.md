@@ -156,7 +156,24 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `DEFAULT_BRANCH_PREFIX` — branch name prefix used when no change_id is provided; default `auto/pr`.
 
 **Naming generation**
-- `NAMING_MAX_ATTEMPTS` — max number of naming generation attempts per repo (default: `2`).
+- `NAMING_MAX_ATTEMPTS` — max number of naming generation attempts per repo (default: `4`).
+- `NAMING_BACKOFF_BASE` — exponential backoff base for naming retries (default: `3.0`).
+- `NAMING_BACKOFF_MIN` — minimum backoff time in seconds for naming retries (default: `5.0`).
+- `NAMING_BACKOFF_MAX` — maximum backoff time in seconds for naming retries (default: `60.0`).
+
+**Relevance evaluation retries**
+- `EVALUATE_MAX_ATTEMPTS` — max number of relevance evaluation retry attempts per repo (default: `4`).
+- `EVALUATE_BACKOFF_BASE` — exponential backoff base for evaluation retries (default: `3.0`).
+- `EVALUATE_BACKOFF_MIN` — minimum backoff time in seconds for evaluation retries (default: `5.0`).
+- `EVALUATE_BACKOFF_MAX` — maximum backoff time in seconds for evaluation retries (default: `60.0`).
+
+**Change agent (apply step) retries**
+- `APPLY_MAX_ATTEMPTS` — max number of change agent retry attempts per repo (default: `4`).
+- `APPLY_BACKOFF_BASE` — exponential backoff base for change agent retries (default: `3.0`).
+- `APPLY_BACKOFF_MIN` — minimum backoff time in seconds for change agent retries (default: `5.0`).
+- `APPLY_BACKOFF_MAX` — maximum backoff time in seconds for change agent retries (default: `60.0`).
+
+> **Note**: The backoff formula is `min * (base^attempt)`, capped at `max`. With the defaults above, retries occur at: 5s → 15s → 45s → 60s.
 
 **Review loop**
 - `REVIEW_MAX_ATTEMPTS` — max number of review→apply retries per repo when the review step returns `CHANGES_REQUIRED` (default: `2`).

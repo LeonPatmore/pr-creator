@@ -67,6 +67,8 @@ async def repo_change_tool(
             pr_url=final_repo_state.created_pr,
             pushed_sha=final_repo_state.created_pr_pushed_sha,
             error=None,
+            changes_pushed=final_repo_state.changes_pushed,
+            ci_passed=final_repo_state.ci_passed,
         )
         if not resp.pr_url:
             logger.info("[orchestrator] repo_change produced no PR for %s", repo_url)
@@ -207,6 +209,8 @@ async def orchestrate_change_step(
                             "branch": r.branch or "",
                             "pr_url": r.pr_url,
                             "pushed_sha": r.pushed_sha,
+                            "changes_pushed": r.changes_pushed,
+                            "ci_passed": r.ci_passed,
                         }
                     )
 
@@ -287,5 +291,7 @@ async def orchestrate_change_discovery_mode(
                         "branch": r.branch or "",
                         "pr_url": r.pr_url,
                         "pushed_sha": r.pushed_sha,
+                        "changes_pushed": r.changes_pushed,
+                        "ci_passed": r.ci_passed,
                     }
                 )

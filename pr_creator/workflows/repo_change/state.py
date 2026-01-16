@@ -36,6 +36,10 @@ class RepoChangeState:
     created_pr: Optional[str] = None
     # The most recent pushed SHA associated with the created PR (if any).
     created_pr_pushed_sha: Optional[str] = None
+    # Whether any changes were pushed in the most recent submit
+    changes_pushed: bool = False
+    # Whether CI checks passed for the PR (None = not waited for, False = failed, True = passed)
+    ci_passed: Optional[bool] = None
     change_id: Optional[str] = None
     # Raw review output from the review step, keyed by repo_url.
     review_feedback: Dict[str, str] = field(default_factory=dict)
@@ -45,6 +49,8 @@ class RepoChangeState:
     review_attempts: Dict[str, int] = field(default_factory=dict)
     # Number of naming generation attempts per repo_url.
     naming_attempts: Dict[str, int] = field(default_factory=dict)
+    # Number of apply (change agent) attempts per repo_url.
+    apply_attempts: Dict[str, int] = field(default_factory=dict)
     # CI/action failure output that should be applied on the next ApplyChanges pass.
     ci_pending: Dict[str, str] = field(default_factory=dict)
     # Number of ci->apply retries attempted per repo_url.

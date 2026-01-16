@@ -17,6 +17,10 @@ class ChangeAgentResponse(BaseModel):
     pr_url: Optional[str] = None
     pushed_sha: Optional[str] = None
     error: Optional[str] = None
+    # Whether any changes were pushed for this repo
+    changes_pushed: bool = False
+    # Whether CI checks passed (None = not waited for, False = failed, True = passed)
+    ci_passed: Optional[bool] = None
 
 
 class OrchestratorResponse(BaseModel):

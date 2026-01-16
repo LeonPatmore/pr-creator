@@ -316,22 +316,8 @@ class GithubSubmitter(SubmitChange):
         self.github_token = github_token
         self._gh = get_github_client(github_token)
 
-    def submit(
-        self,
-        repo_path: Path,
-        change_prompt: str | None = None,
-        change_id: str | None = None,
-        branch: str | None = None,
-        pr_title: str | None = None,
-        commit_message: str | None = None,
-    ) -> Optional[Dict[str, str]]:
-        # Token must be provided by the caller (e.g., via workflow state / factory).
-        github_token = self.github_token
-        repo = _load_repo(Path(repo_path))
-        origin = strip_auth_from_url(_origin_url(repo))
-        pushed_sha: str | None = None
-
-        # Ensure we are on the intended branch (change agents may checkout base)
+    def _ensure_branch(self, repo: Repo, branch: str | None) -> str:
+        """Ensure we're on the correct branch and return its name."""
         if branch:
             desired_ref = f"refs/heads/{branch}".encode()
             if desired_ref in repo.refs:
@@ -348,143 +334,102 @@ class GithubSubmitter(SubmitChange):
                 porcelain.branch_create(repo.path, branch.encode(), head_target)
                 repo.refs.set_symbolic_ref(b"HEAD", desired_ref)
                 porcelain.checkout_branch(repo, branch, force=True)
-            current_branch = branch
+            return branch
         else:
-            current_branch = _current_branch(repo)
+            return _current_branch(repo)
 
-        logger.info("[submit] current branch=%s", current_branch)
+    def _push_if_ahead(
+        self,
+        repo: Repo,
+        current_branch: str,
+        origin: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Push local commits if ahead of origin.
 
-        # Get remote repo and base branch
-        remote_repo, base_branch = _get_remote_repo_and_base_branch(
-            origin, self._gh, self.base_branch
-        )
+        Returns (pushed: bool, pushed_sha: Optional[str])
+        """
+        if not self.github_token:
+            return False, None
 
-        pr_body = _build_pr_body(self.pr_body, change_prompt)
-        pr_title_final = pr_title or "Automated changes"
-        commit_message_final = commit_message or "Automated changes"
-
-        def _push_if_ahead() -> bool:
-            nonlocal pushed_sha
-            if not github_token:
-                return False
-            ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
-            if behind > 0 and ahead == 0:
-                logger.warning(
-                    "[submit] local branch is behind origin/%s (behind=%s, ahead=%s); skipping push",
-                    current_branch,
-                    behind,
-                    ahead,
-                )
-                return False
-            if ahead == 0:
-                return False
-
-            # If both ahead and behind, the change agent rewrote history (e.g., reset/amend).
-            # Force push since we own this feature branch.
-            force = behind > 0
-            if force:
-                logger.info(
-                    "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing",
-                    current_branch,
-                    behind,
-                    ahead,
-                )
-            else:
-                logger.info(
-                    "[submit] local branch ahead of origin/%s by %s commits; pushing",
-                    current_branch,
-                    ahead,
-                )
-            pushed_sha = _sha_to_hex(repo.head())
-            _push_branch(repo, current_branch, github_token, origin, force=force)
-            return True
-
-        # Commit only when there is something to commit.
-        # Note: `status()` is a cheap pre-check, but we still double-check after staging.
-        if not _git_status_dirty(repo):
-            logger.info("[submit] no local file changes detected")
-            pushed = _push_if_ahead()
-            if not pushed:
-                logger.info("[submit] nothing to push; skipping PR creation")
-                return None
-
-            # We pushed commits, so we should return an existing PR if one exists.
-            if not remote_repo:
-                logger.warning("GitHub token not set; skipping PR creation")
-                return {"repo_url": origin, "branch": current_branch, "pr_url": None}
-
-            if current_branch == base_branch:
-                logger.warning(
-                    "Current branch '%s' matches base '%s'; skipping PR creation",
-                    current_branch,
-                    base_branch,
-                )
-                return {"repo_url": origin, "branch": current_branch, "pr_url": None}
-
-            existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
-            if existing_pr:
-                _update_existing_pr(existing_pr, pr_body=pr_body)
-                result = {
-                    "repo_url": origin,
-                    "branch": current_branch,
-                    "pr_url": existing_pr.html_url,
-                }
-                if pushed_sha:
-                    result["pushed_sha"] = pushed_sha
-                return result
-
-            _wait_for_remote_branch(remote_repo, current_branch)
-            head_ref = _qualified_head(remote_repo, current_branch)
-            logger.info("[submit] creating PR head=%s base=%s", head_ref, base_branch)
-            pr = remote_repo.create_pull(
-                title=pr_title_final,
-                body=pr_body,
-                head=head_ref,
-                base=base_branch,
+        ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
+        if behind > 0 and ahead == 0:
+            logger.warning(
+                "[submit] local branch is behind origin/%s (behind=%s, ahead=%s); skipping push",
+                current_branch,
+                behind,
+                ahead,
             )
-            result = {
+            return False, None
+        if ahead == 0:
+            return False, None
+
+        # If both ahead and behind, the change agent rewrote history (e.g., reset/amend).
+        # Force push since we own this feature branch.
+        force = behind > 0
+        if force:
+            logger.info(
+                "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing",
+                current_branch,
+                behind,
+                ahead,
+            )
+        else:
+            logger.info(
+                "[submit] local branch ahead of origin/%s by %s commits; pushing",
+                current_branch,
+                ahead,
+            )
+        pushed_sha = _sha_to_hex(repo.head())
+        _push_branch(repo, current_branch, self.github_token, origin, force=force)
+        return True, pushed_sha
+
+    def _handle_no_changes_to_push(
+        self,
+        remote_repo: Repository | None,
+        current_branch: str,
+        base_branch: str,
+        origin: str,
+        pr_body: str,
+    ) -> Optional[Dict[str, str]]:
+        """Handle case where there are no changes to push - check for existing PR."""
+        logger.info("[submit] nothing to push")
+
+        if not remote_repo:
+            return None
+
+        if current_branch == base_branch:
+            return None
+
+        existing_pr = _find_existing_pr(remote_repo, current_branch, base_branch)
+        if existing_pr:
+            # Return existing PR info so CI can run against latest commit
+            _update_existing_pr(existing_pr, pr_body=pr_body)
+            logger.info(
+                "[submit] no changes pushed, but PR exists: %s", existing_pr.html_url
+            )
+            return {
                 "repo_url": origin,
                 "branch": current_branch,
-                "pr_url": pr.html_url,
+                "pr_url": existing_pr.html_url,
+                # Note: no pushed_sha since we didn't push anything
             }
-            if pushed_sha:
-                result["pushed_sha"] = pushed_sha
-            return result
 
-        committed = _commit_changes_if_needed(repo, commit_message_final)
-        pushed = False
-        if not committed:
-            logger.info(
-                "[submit] no staged changes vs HEAD; skipping commit/PR creation"
-            )
-            # If changes were committed by the change agent (or the index is clean),
-            # we may still have local commits to push.
-            pushed = _push_if_ahead()
-            if not pushed:
-                return None
-        else:
-            # We created a new commit; always push it.
-            pushed = True
-            pushed_sha = _sha_to_hex(repo.head())
+        # No PR exists and nothing to push
+        logger.info("[submit] no PR exists and nothing to push; skipping")
+        return None
 
-        if not github_token:
-            logger.warning("GitHub token not set; skipping push/PR creation")
-            return {"repo_url": origin, "branch": current_branch, "pr_url": None}
-
-        if pushed and committed:
-            pushed_sha = pushed_sha or _sha_to_hex(repo.head())
-            # Check if we need to force push (e.g., if change agent amended/reset commits)
-            ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
-            force = behind > 0
-            if force:
-                logger.info(
-                    "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing new commit",
-                    current_branch,
-                    behind,
-                    ahead,
-                )
-            _push_branch(repo, current_branch, github_token, origin, force=force)
-
+    def _find_or_create_pr(
+        self,
+        remote_repo: Repository | None,
+        current_branch: str,
+        base_branch: str,
+        origin: str,
+        pr_title: str,
+        pr_body: str,
+        pushed_sha: Optional[str],
+    ) -> Optional[Dict[str, str]]:
+        """Find existing PR or create a new one."""
         if not remote_repo:
             logger.warning("GitHub token not set; skipping PR creation")
             return {"repo_url": origin, "branch": current_branch, "pr_url": None}
@@ -516,7 +461,7 @@ class GithubSubmitter(SubmitChange):
         logger.info("[submit] creating PR head=%s base=%s", head_ref, base_branch)
         try:
             pr = remote_repo.create_pull(
-                title=pr_title_final,
+                title=pr_title,
                 body=pr_body,
                 head=head_ref,
                 base=base_branch,
@@ -541,3 +486,156 @@ class GithubSubmitter(SubmitChange):
         if pushed_sha:
             result["pushed_sha"] = pushed_sha
         return result
+
+    def submit(
+        self,
+        repo_path: Path,
+        change_prompt: str | None = None,
+        change_id: str | None = None,
+        branch: str | None = None,
+        pr_title: str | None = None,
+        commit_message: str | None = None,
+    ) -> Optional[Dict[str, str]]:
+        """
+        Submit changes to GitHub by committing, pushing, and creating/updating PRs.
+
+        Returns dict with repo_url, branch, pr_url, and optionally pushed_sha.
+        Returns None if no changes and no existing PR.
+        """
+        repo = _load_repo(Path(repo_path))
+        origin = strip_auth_from_url(_origin_url(repo))
+
+        # Ensure we're on the correct branch
+        current_branch = self._ensure_branch(repo, branch)
+        logger.info("[submit] current branch=%s", current_branch)
+
+        # Get remote repo and base branch
+        remote_repo, base_branch = _get_remote_repo_and_base_branch(
+            origin, self._gh, self.base_branch
+        )
+
+        pr_body = _build_pr_body(self.pr_body, change_prompt)
+        pr_title_final = pr_title or "Automated changes"
+        commit_message_final = commit_message or "Automated changes"
+
+        # Check if there are local file changes
+        if not _git_status_dirty(repo):
+            return self._handle_clean_working_directory(
+                repo, current_branch, origin, remote_repo, base_branch, pr_body
+            )
+
+        # Try to commit local changes
+        committed = _commit_changes_if_needed(repo, commit_message_final)
+        if not committed:
+            return self._handle_no_commit_needed(
+                repo, current_branch, origin, remote_repo, base_branch, pr_body
+            )
+
+        # We made a new commit - push and create/update PR
+        return self._handle_new_commit(
+            repo,
+            current_branch,
+            origin,
+            remote_repo,
+            base_branch,
+            pr_title_final,
+            pr_body,
+        )
+
+    def _handle_clean_working_directory(
+        self,
+        repo: Repo,
+        current_branch: str,
+        origin: str,
+        remote_repo: Repository | None,
+        base_branch: str,
+        pr_body: str,
+    ) -> Optional[Dict[str, str]]:
+        """Handle case where working directory is clean (no uncommitted changes)."""
+        logger.info("[submit] no local file changes detected")
+        pushed, pushed_sha = self._push_if_ahead(repo, current_branch, origin)
+
+        if not pushed:
+            return self._handle_no_changes_to_push(
+                remote_repo, current_branch, base_branch, origin, pr_body
+            )
+
+        # We pushed commits - find or create PR
+        return self._find_or_create_pr(
+            remote_repo,
+            current_branch,
+            base_branch,
+            origin,
+            "Automated changes",  # Title not provided in this path
+            pr_body,
+            pushed_sha,
+        )
+
+    def _handle_no_commit_needed(
+        self,
+        repo: Repo,
+        current_branch: str,
+        origin: str,
+        remote_repo: Repository | None,
+        base_branch: str,
+        pr_body: str,
+    ) -> Optional[Dict[str, str]]:
+        """Handle case where staging found no changes vs HEAD."""
+        logger.info("[submit] no staged changes vs HEAD; skipping commit/PR creation")
+
+        # Check if there are already-committed changes to push
+        pushed, pushed_sha = self._push_if_ahead(repo, current_branch, origin)
+        if not pushed:
+            return self._handle_no_changes_to_push(
+                remote_repo, current_branch, base_branch, origin, pr_body
+            )
+
+        # We pushed existing commits - find or create PR
+        return self._find_or_create_pr(
+            remote_repo,
+            current_branch,
+            base_branch,
+            origin,
+            "Automated changes",  # Title not provided in this path
+            pr_body,
+            pushed_sha,
+        )
+
+    def _handle_new_commit(
+        self,
+        repo: Repo,
+        current_branch: str,
+        origin: str,
+        remote_repo: Repository | None,
+        base_branch: str,
+        pr_title: str,
+        pr_body: str,
+    ) -> Optional[Dict[str, str]]:
+        """Handle case where we just created a new commit."""
+        if not self.github_token:
+            logger.warning("GitHub token not set; skipping push/PR creation")
+            return {"repo_url": origin, "branch": current_branch, "pr_url": None}
+
+        # Push the new commit
+        pushed_sha = _sha_to_hex(repo.head())
+        ahead, behind = _ahead_behind_vs_origin(repo, current_branch)
+        force = behind > 0
+        if force:
+            logger.info(
+                "[submit] local branch diverged from origin/%s (behind=%s, ahead=%s); force-pushing new commit",
+                current_branch,
+                behind,
+                ahead,
+            )
+        _push_branch(repo, current_branch, self.github_token, origin, force=force)
+
+        # Find or create PR
+        return self._find_or_create_pr(
+            remote_repo,
+            current_branch,
+            base_branch,
+            origin,
+            pr_title,
+            pr_body,
+            pushed_sha,
+        )

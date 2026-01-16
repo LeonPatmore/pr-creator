@@ -1,21 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
-from pr_creator.workflows.repo_change.naming_step.config import get_naming_max_attempts
+from pr_creator.retry_utils import RetryConfig
 from pr_creator.workflows.repo_change.naming_step.naming_agents import get_naming_agent
 
 logger = logging.getLogger(__name__)
 
 _agent = get_naming_agent()
 
-
-def _max_naming_attempts() -> int:
-    return get_naming_max_attempts()
+# Naming retry configuration
+_naming_retry_config = RetryConfig(env_prefix="NAMING")
 
 
 def _truncate_with_ellipsis(text: str, max_len: int) -> str:
@@ -54,7 +54,7 @@ class GenerateNames(BaseNode):
         change_id = ctx.state.change_id
 
         attempts = ctx.state.naming_attempts.get(self.repo_url, 0)
-        max_attempts = _max_naming_attempts()
+        max_attempts = _naming_retry_config.get_max_attempts()
 
         logger.info(
             "[naming] agent=%s max_attempts=%s current_attempts=%s",
@@ -68,10 +68,13 @@ class GenerateNames(BaseNode):
         if short_desc is None:
             if attempts < max_attempts:
                 ctx.state.naming_attempts[self.repo_url] = attempts + 1
+                backoff_seconds = _naming_retry_config.calculate_backoff(attempts)
                 logger.warning(
-                    "[naming] generation failed; retrying (attempt %s)",
+                    "[naming] generation failed; retrying after %.1fs backoff (attempt %s)",
+                    backoff_seconds,
                     attempts + 1,
                 )
+                await asyncio.sleep(backoff_seconds)
                 return GenerateNames(repo_url=self.repo_url)
 
             logger.warning(

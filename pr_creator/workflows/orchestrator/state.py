@@ -63,3 +63,6 @@ class OrchestratorState:
 
     # Errors from orchestration (e.g., unable to determine target repo)
     orchestrator_errors: List[str] = field(default_factory=list)
+
+    # Retry tracking for evaluate step
+    evaluate_attempts: Dict[str, int] = field(default_factory=dict)

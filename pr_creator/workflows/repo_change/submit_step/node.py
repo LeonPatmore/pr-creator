@@ -33,6 +33,12 @@ class SubmitChanges(BaseNode):
                 commit_message=ctx.state.commit_messages.get(self.repo_url),
             )
         )
+
+        # Track whether changes were pushed
+        # If result is None, no changes were pushed
+        # If result has pushed_sha, changes were pushed
+        ctx.state.changes_pushed = False
+
         if result:
             pr_url = (result or {}).get("pr_url")
             pushed_sha = (result or {}).get("pushed_sha")
@@ -40,6 +46,7 @@ class SubmitChanges(BaseNode):
             # Track pushed sha even if PR creation is skipped (e.g., missing token).
             if pushed_sha:
                 ctx.state.created_pr_pushed_sha = pushed_sha
+                ctx.state.changes_pushed = True
 
             # Only consider "created_pr" to exist if we have a PR URL.
             if pr_url:

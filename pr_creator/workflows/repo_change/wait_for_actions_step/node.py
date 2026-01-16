@@ -77,6 +77,7 @@ class WaitForActions(BaseNode):
         )
         if ok:
             logger.info("[ci] %s", message)
+            ctx.state.ci_passed = True
             from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)
@@ -103,6 +104,7 @@ class WaitForActions(BaseNode):
             attempts,
             max_attempts,
         )
+        ctx.state.ci_passed = False
         from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
         return CleanupRepo(repo_url=self.repo_url)

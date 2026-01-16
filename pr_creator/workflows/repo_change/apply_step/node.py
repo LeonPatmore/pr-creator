@@ -11,11 +11,15 @@ from dulwich import porcelain
 from dulwich.repo import Repo
 from pydantic_graph import BaseNode, End, GraphRunContext
 
+from pr_creator.retry_utils import RetryConfig
 from pr_creator.workflows.repo_change.apply_step.change_agents import get_change_agent
 
 logger = logging.getLogger(__name__)
 
 _agent = get_change_agent()
+
+# Apply retry configuration
+_apply_retry_config = RetryConfig(env_prefix="APPLY")
 
 
 def _build_change_prompt(
@@ -197,7 +201,18 @@ class ApplyChanges(BaseNode):
 
     async def run(self, ctx: GraphRunContext) -> BaseNode | End:
         path = ctx.state.cloned[self.repo_url]
-        logger.info("Applying change agent on %s at %s", self.repo_url, path)
+
+        attempts = ctx.state.apply_attempts.get(self.repo_url, 0)
+        max_attempts = _apply_retry_config.get_max_attempts()
+
+        logger.info(
+            "[apply] agent=%s max_attempts=%s current_attempts=%s repo=%s path=%s",
+            type(_agent).__name__,
+            max_attempts,
+            attempts,
+            self.repo_url,
+            path,
+        )
 
         prompt = _build_change_prompt(
             repo_specific_prompt=ctx.state.prompt,
@@ -207,14 +222,35 @@ class ApplyChanges(BaseNode):
         )
 
         # Change agent runs Cursor CLI asynchronously
-        await _agent.run(
-            path,
-            prompt,
-            context_roots=ctx.state.context_roots,
-            secrets=ctx.state.change_agent_secrets,
-        )
-        await asyncio.to_thread(_post_apply_guardrails, Path(path))
-        ctx.state.processed.append(self.repo_url)
+        try:
+            await _agent.run(
+                path,
+                prompt,
+                context_roots=ctx.state.context_roots,
+                secrets=ctx.state.change_agent_secrets,
+            )
+            await asyncio.to_thread(_post_apply_guardrails, Path(path))
+            ctx.state.processed.append(self.repo_url)
+        except Exception as e:
+            if attempts < max_attempts:
+                ctx.state.apply_attempts[self.repo_url] = attempts + 1
+                backoff_seconds = _apply_retry_config.calculate_backoff(attempts)
+                logger.warning(
+                    "[apply] change agent failed; retrying after %.1fs backoff (attempt %s): %s",
+                    backoff_seconds,
+                    attempts + 1,
+                    str(e),
+                )
+                await asyncio.sleep(backoff_seconds)
+                return ApplyChanges(repo_url=self.repo_url)
+
+            logger.error(
+                "[apply] change agent failed after %s attempt(s) (max=%s): %s",
+                attempts,
+                max_attempts,
+                str(e),
+            )
+            raise
 
         from pr_creator.workflows.repo_change.review_step.node import ReviewChanges
 
