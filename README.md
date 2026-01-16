@@ -134,6 +134,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 
 **MCP servers (optional)**
 - `MCP_CONFIG` — path to MCP servers configuration file (JSON format). Defaults to `~/.pr-creator/mcp-servers.json` if that file exists. If provided (via env or CLI), the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.
+- `ORCHESTRATOR_MCP_MAX_RETRIES` — max retries for MCP tool calls (default: `5`). Useful for flaky networks or transient GitHub/MCP failures.
 
 **Agent context (optional)**
 - `AGENT_CONTEXT_ROOTS` — comma-separated absolute paths on your machine to mount read-only into the agent workspace for extra repo context (available under `/workspace/context/<n>` inside the agent).

@@ -53,6 +53,20 @@ def _load_mcp_toolsets(mcp_config_path: Optional[Path]) -> list:
 
         logger.info("[orchestrator] loading MCP servers from %s", mcp_config_path)
         toolsets = load_mcp_servers(str(mcp_config_path))
+        mcp_max_retries = int(os.environ.get("ORCHESTRATOR_MCP_MAX_RETRIES", "5"))
+        if mcp_max_retries < 0:
+            mcp_max_retries = 0
+        for toolset in toolsets:
+            if hasattr(toolset, "max_retries"):
+                try:
+                    toolset.max_retries = mcp_max_retries
+                except Exception:
+                    # If the toolset doesn't allow assignment, skip.
+                    pass
+        logger.info(
+            "[orchestrator] MCP tool retry policy: ORCHESTRATOR_MCP_MAX_RETRIES=%d",
+            mcp_max_retries,
+        )
         logger.info("[orchestrator] loaded %d MCP server(s) as toolsets", len(toolsets))
         return toolsets
     except ImportError:
