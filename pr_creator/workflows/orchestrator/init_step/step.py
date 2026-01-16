@@ -6,11 +6,11 @@ from pathlib import Path
 
 from pydantic_graph.beta import StepContext
 
-from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.init_step.prompt_loading_support.prompt_loading import (
     load_and_merge_prompts,
     resolve_secrets_and_context,
 )
+from pr_creator.workflows.orchestrator.state import OrchestratorState
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +29,12 @@ async def init_step(ctx: StepContext[OrchestratorState, None, None]) -> None:
     if not ctx.state.prompt_config_ref:
         ctx.state.prompt_config_ref = DEFAULT_PROMPT_CONFIG_REF
 
-    # GitHub auth token is optional overall, but if not explicitly provided via CLI,
-    # fall back to the process environment so prompt-config loading + PR submission work.
     if not ctx.state.github_token:
         ctx.state.github_token = os.environ.get("GITHUB_TOKEN")
 
     if not ctx.state.github_default_org:
         ctx.state.github_default_org = os.environ.get("GITHUB_DEFAULT_ORG")
 
-    # MCP config path: CLI flag > env var > default if file exists
     if not ctx.state.mcp_config_path:
         env_mcp_config = os.environ.get("MCP_CONFIG")
         if env_mcp_config:

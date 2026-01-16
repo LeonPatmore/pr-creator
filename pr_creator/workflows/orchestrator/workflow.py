@@ -5,15 +5,13 @@ from pydantic_graph.beta.join import reduce_list_append
 
 from pr_creator.logging_config import ensure_logging_configured
 from pr_creator.workflows.orchestrator.state import OrchestratorState
-from pr_creator.workflows.orchestrator.init_step import node as init_node
-from pr_creator.workflows.orchestrator.discover_repos_step import (
-    node as discover_node,
-)
+from pr_creator.workflows.orchestrator.init_step import step as init_step
+from pr_creator.workflows.orchestrator.discover_repos_step import step as discover_step
 from pr_creator.workflows.orchestrator.evaluate_relevance_step import (
-    node as evaluate_node,
+    step as evaluate_step,
 )
 from pr_creator.workflows.orchestrator.orchestrate_change_step import (
-    node as orchestrate_node,
+    step as orchestrate_step,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,18 +33,18 @@ def build_orchestrator_graph() -> GraphBuilder:
     )
 
     # Register step functions with the graph
-    init_step = g.step(init_node.init_step)
-    discover_repos_step = g.step(discover_node.discover_repos_step)
-    evaluate_relevance_step = g.step(evaluate_node.evaluate_relevance_step)
-    orchestrate_change_step = g.step(orchestrate_node.orchestrate_change_step)
+    init_step_node = g.step(init_step.init_step)
+    discover_repos_step = g.step(discover_step.discover_repos_step)
+    evaluate_relevance_step = g.step(evaluate_step.evaluate_relevance_step)
+    orchestrate_change_step = g.step(orchestrate_step.orchestrate_change_step)
 
     # Join node to collect all parallel results
     collect_results = g.join(reduce_list_append, initial_factory=list)
 
     # Build flow for repos
     g.add(
-        g.edge_from(g.start_node).to(init_step),
-        g.edge_from(init_step).to(discover_repos_step),
+        g.edge_from(g.start_node).to(init_step_node),
+        g.edge_from(init_step_node).to(discover_repos_step),
         # Map over discovered repos (if any) - empty list gracefully skips
         g.edge_from(discover_repos_step).map().to(evaluate_relevance_step),
         # Edge from evaluate to orchestrate (None values handled in orchestrate step)

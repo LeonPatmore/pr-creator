@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from pr_creator.workflows.orchestrator.evaluate_relevance_step.node import (
-    _evaluate_relevance_with_cache,
+from pr_creator.workflows.orchestrator.evaluate_relevance_step.service import (
+    evaluate_relevance_with_cache,
 )
 
 
@@ -30,30 +30,30 @@ async def test_evaluate_relevance_retries_on_failure(tmp_path: Path):
         return True
 
     with patch(
-        "pr_creator.workflows.orchestrator.evaluate_relevance_step.node.try_get_repo_head_sha",
+        "pr_creator.workflows.orchestrator.evaluate_relevance_step.service.try_get_repo_head_sha",
         return_value="abc123def",  # Return a fake SHA
     ):
         with patch(
-            "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._cache"
+            "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._cache"
         ) as mock_cache:
             mock_cache.get.return_value = None  # No cache hit
 
             with patch(
-                "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._agent"
+                "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._agent"
             ) as mock_agent:
                 mock_agent.evaluate = AsyncMock(side_effect=mock_evaluate)
 
                 with patch(
                     "pr_creator.workflows.orchestrator.evaluate_relevance_step."
-                    "node._evaluate_retry_config.get_max_attempts",
+                    "service._evaluate_retry_config.get_max_attempts",
                     return_value=2,  # Max 2 retries = 3 total attempts
                 ):
                     with patch(
                         "pr_creator.workflows.orchestrator.evaluate_relevance_step."
-                        "node._evaluate_retry_config.calculate_backoff",
+                        "service._evaluate_retry_config.calculate_backoff",
                         return_value=0.01,  # Fast backoff for testing
                     ):
-                        result = await _evaluate_relevance_with_cache(
+                        result = await evaluate_relevance_with_cache(
                             repo_url=repo_url,
                             repo_path=tmp_path,
                             prompt=prompt,
@@ -74,31 +74,31 @@ async def test_evaluate_relevance_raises_after_max_attempts(tmp_path: Path):
         raise RuntimeError("Agent always fails")
 
     with patch(
-        "pr_creator.workflows.orchestrator.evaluate_relevance_step.node.try_get_repo_head_sha",
+        "pr_creator.workflows.orchestrator.evaluate_relevance_step.service.try_get_repo_head_sha",
         return_value="abc123def",
     ):
         with patch(
-            "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._cache"
+            "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._cache"
         ) as mock_cache:
             mock_cache.get.return_value = None  # No cache hit
 
             with patch(
-                "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._agent"
+                "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._agent"
             ) as mock_agent:
                 mock_agent.evaluate = AsyncMock(side_effect=mock_evaluate)
 
                 with patch(
                     "pr_creator.workflows.orchestrator.evaluate_relevance_step."
-                    "node._evaluate_retry_config.get_max_attempts",
+                    "service._evaluate_retry_config.get_max_attempts",
                     return_value=1,  # Max 1 retry = 2 total attempts
                 ):
                     with patch(
                         "pr_creator.workflows.orchestrator.evaluate_relevance_step."
-                        "node._evaluate_retry_config.calculate_backoff",
+                        "service._evaluate_retry_config.calculate_backoff",
                         return_value=0.01,
                     ):
                         with pytest.raises(RuntimeError, match="Agent always fails"):
-                            await _evaluate_relevance_with_cache(
+                            await evaluate_relevance_with_cache(
                                 repo_url=repo_url,
                                 repo_path=tmp_path,
                                 prompt=prompt,
@@ -119,20 +119,20 @@ async def test_evaluate_relevance_success_first_try(tmp_path: Path):
         return False
 
     with patch(
-        "pr_creator.workflows.orchestrator.evaluate_relevance_step.node.try_get_repo_head_sha",
+        "pr_creator.workflows.orchestrator.evaluate_relevance_step.service.try_get_repo_head_sha",
         return_value="abc123def",
     ):
         with patch(
-            "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._cache"
+            "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._cache"
         ) as mock_cache:
             mock_cache.get.return_value = None  # No cache hit
 
             with patch(
-                "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._agent"
+                "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._agent"
             ) as mock_agent:
                 mock_agent.evaluate = AsyncMock(side_effect=mock_evaluate)
 
-                result = await _evaluate_relevance_with_cache(
+                result = await evaluate_relevance_with_cache(
                     repo_url=repo_url,
                     repo_path=tmp_path,
                     prompt=prompt,
@@ -150,18 +150,18 @@ async def test_evaluate_relevance_uses_cache(tmp_path: Path):
 
     # Mock the cache to return a cached value
     with patch(
-        "pr_creator.workflows.orchestrator.evaluate_relevance_step.node.try_get_repo_head_sha",
+        "pr_creator.workflows.orchestrator.evaluate_relevance_step.service.try_get_repo_head_sha",
         return_value="abc123def",
     ):
         with patch(
-            "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._cache"
+            "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._cache"
         ) as mock_cache:
             mock_cache.get.return_value = True  # Cached as relevant
 
             with patch(
-                "pr_creator.workflows.orchestrator.evaluate_relevance_step.node._agent"
+                "pr_creator.workflows.orchestrator.evaluate_relevance_step.service._agent"
             ) as mock_agent:
-                result = await _evaluate_relevance_with_cache(
+                result = await evaluate_relevance_with_cache(
                     repo_url=repo_url,
                     repo_path=tmp_path,
                     prompt=prompt,
