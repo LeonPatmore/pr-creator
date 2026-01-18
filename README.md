@@ -77,6 +77,7 @@ You choose exactly **one base prompt source**:
 **Notes**
 - **Mutual exclusion**: you can’t use Jira (`--jira-ticket`) and prompt config (`--prompt-config-*`) together.
 - **Prompt “tail”**: if you use prompt config or Jira and also pass `--prompt`, the CLI prompt is treated as **higher priority** and is placed in a top “Highest priority instructions (CLI)” section.
+- **Exit status**: the CLI exits with code **1** if any errors are recorded in `orchestrator_errors` (even if some PRs were successfully created).
 
 ### Multi-repo changes
 Target repos in one (or more) of these ways:

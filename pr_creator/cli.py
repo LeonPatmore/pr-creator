@@ -224,6 +224,8 @@ def main() -> None:
     }
 
     _print_workflow_summary(final_state, summary)
+    if final_state.orchestrator_errors:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

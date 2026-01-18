@@ -54,12 +54,10 @@ class GenerateNames(BaseNode):
                 await asyncio.sleep(backoff_seconds)
                 return GenerateNames(repo_url=self.repo_url)
 
-            logger.warning(
-                "[naming] generation failed after %s attempt(s) (max=%s); using fallback",
-                attempts,
-                max_attempts,
+            raise RuntimeError(
+                f"[naming] generation failed for repo_url={self.repo_url!r} "
+                f"after {attempts} attempt(s) (max={max_attempts})"
             )
-            short_desc = "auto-change"
 
         slug_raw = slugify(short_desc)
 
