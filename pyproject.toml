@@ -39,3 +39,8 @@ Issues = "https://github.com/LeonPatmore/pr-creator/issues"
 
 [tool.setuptools.packages.find]
 include = ["pr_creator*"]
+
+[tool.pytest.ini_options]
+markers = [
+  "e2e: end-to-end tests (may require network, docker, and real credentials)",
+]

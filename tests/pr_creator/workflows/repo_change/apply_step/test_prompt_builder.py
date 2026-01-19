@@ -5,6 +5,7 @@ from pr_creator.workflows.repo_change.apply_step.prompt_builder import (
     build_guarded_change_prompt,
     guard_change_agent_prompt,
 )
+from pr_creator.workflows.repo_change.ci_types import CiFailure
 
 
 def test_guard_change_agent_prompt_wraps_task():
@@ -24,7 +25,15 @@ def test_build_change_prompt_orders_sections_and_includes_base_request():
     prompt = build_change_prompt(
         repo_specific_prompt="Repo prompt",
         base_prompt="Base prompt",
-        ci_feedback="CI failed",
+        ci_failures=[
+            CiFailure(
+                pr_url="https://github.com/o/r/pull/1",
+                head_sha="deadbeef",
+                name="lint",
+                details_url="https://github.com/o/r/actions/runs/1",
+                logs="flake8 failed",
+            )
+        ],
         review_feedback="Please change X",
     )
     assert prompt.index("Fix failing CI") < prompt.index("Address review feedback")
@@ -37,7 +46,7 @@ def test_build_guarded_change_prompt_includes_guard_and_task():
     prompt = build_guarded_change_prompt(
         repo_specific_prompt="Repo prompt",
         base_prompt=None,
-        ci_feedback="",
+        ci_failures=[],
         review_feedback="",
     )
     assert "# YOUR ROLE" in prompt

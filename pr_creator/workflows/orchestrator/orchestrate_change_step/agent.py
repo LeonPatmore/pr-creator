@@ -9,7 +9,7 @@ from typing import Awaitable, Callable, Optional
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 
-from .model_builder import build_model
+from pr_creator.model_builder import build_model
 from .system_prompt_builder import build_orchestrator_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ class ChangeAgentResponse(BaseModel):
     error: Optional[str] = None
     changes_pushed: bool = False
     ci_passed: Optional[bool] = None
+    ci_failure_summaries: Optional[list[str]] = None
 
 
 class OrchestratorResponse(BaseModel):
@@ -101,7 +102,7 @@ async def build_orchestrate_change_agent(
     tool_called = {"called": False}
 
     model_name = os.environ.get("ORCHESTRATOR_MODEL", "openai:gpt-5.2")
-    model = build_model(model_name)
+    model = build_model(model_name, log_prefix="orchestrator", log=logger)
 
     toolsets = _load_mcp_toolsets(mcp_config_path)
 

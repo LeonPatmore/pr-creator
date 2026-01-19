@@ -50,6 +50,10 @@ async def repo_change_tool(
             error=None,
             changes_pushed=final_repo_state.changes_pushed,
             ci_passed=final_repo_state.ci_passed,
+            ci_failure_summaries=(final_repo_state.ci_failure_summaries or {}).get(
+                repo_url
+            )
+            or None,
         )
         if not resp.pr_url:
             logger.info("[orchestrator] repo_change produced no PR for %s", repo_url)

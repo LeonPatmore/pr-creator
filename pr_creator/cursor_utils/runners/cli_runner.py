@@ -26,11 +26,11 @@ _TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
 def _get_timeout_seconds() -> float | None:
     raw = (os.environ.get("CURSOR_AGENT_TIMEOUT_SECONDS") or "").strip()
     if not raw:
-        return 600.0
+        return 900.0
     try:
         v = float(raw)
     except Exception:
-        return 600.0
+        return 900.0
     return v if v > 0 else None
 
 

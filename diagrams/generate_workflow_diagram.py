@@ -64,7 +64,12 @@ def add_repo_change_nodes(graph):
     )
     graph.node(
         "wait",
-        "WaitForActions\n\n• Poll GitHub Actions\n• Check CI status\n• Collect logs",
+        "WaitForActions\n\n• Poll GitHub Actions\n• Check CI status\n• Collect failures",
+    )
+    graph.node(
+        "summarize_ci",
+        "SummarizeCiFailures\n\n• AI summarizes each CI failure\n• Logs summaries",
+        fillcolor="#ffeb3b",
     )
     graph.node("cleanup", "CleanupRepo\n\n• Remove workspace\n  (unless change_id set)")
 
@@ -85,11 +90,19 @@ def add_repo_change_edges(graph):
     graph.edge(
         "wait",
         "apply",
-        label="CI failed\n(max attempts)",
+        label="CI failed\n(retries left)",
         style="dashed",
         color="#d32f2f",
     )
-    graph.edge("wait", "cleanup", label="CI passed\nor max attempts")
+    graph.edge(
+        "wait",
+        "summarize_ci",
+        label="CI failed\n(no retries left)",
+        style="dashed",
+        color="#d32f2f",
+    )
+    graph.edge("wait", "cleanup", label="CI passed")
+    graph.edge("summarize_ci", "cleanup", label="summaries logged")
 
 
 def create_orchestrator_workflow():

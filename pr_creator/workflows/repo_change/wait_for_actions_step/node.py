@@ -8,6 +8,7 @@ from functools import partial
 
 from pydantic_graph import BaseNode, End, GraphRunContext
 
+from pr_creator.workflows.repo_change.ci_types import CiFailure
 from pr_creator.workflows.repo_change.wait_for_actions_step.github_actions import (
     load_ci_wait_config,
     wait_for_ci,
@@ -23,17 +24,16 @@ def _max_ci_attempts() -> int:
         return 2
 
 
-def _summarize_ci_message(message: str) -> str:
+def _summarize_ci_failures(failures: list[CiFailure]) -> str:
     """
-    CI failure messages can include large logs. This produces a small summary
-    suitable for logging.
+    CI failures can include large logs. This produces a small summary suitable for logging.
     """
-    lines = [ln.strip() for ln in (message or "").splitlines() if ln.strip()]
-    head_sha = next((ln for ln in lines if ln.startswith("- head_sha:")), None)
-    summary = next((ln for ln in lines if ln.startswith("- summary:")), None)
-    status = next((ln for ln in lines if ln.startswith("- status:")), None)
-    parts = [p for p in (head_sha, summary, status) if p]
-    return " ".join(parts) if parts else (lines[0] if lines else "CI failure")
+    if not failures:
+        return "CI failure"
+    names = ", ".join(f.name for f in failures[:4] if getattr(f, "name", None))
+    suffix = "…" if len(failures) > 4 else ""
+    head_sha = failures[0].head_sha[:12] if failures[0].head_sha else ""
+    return f"head_sha={head_sha} failures={len(failures)} [{names}{suffix}]".strip()
 
 
 @dataclass
@@ -64,37 +64,41 @@ class WaitForActions(BaseNode):
             ",".join(cfg.acceptable_conclusions),
         )
 
+        attempts = ctx.state.ci_attempts.get(self.repo_url, 0)
+        max_attempts = _max_ci_attempts()
+        # On the final attempt (no retries left), do NOT fail fast on the first failed check.
+        # Instead, wait for all checks to reach terminal state so we can summarize all failures.
+        fail_fast_on_failure = attempts < max_attempts
+
         expected_head_sha = ctx.state.created_pr_pushed_sha
         # CI polling does network + sleeps (blocking); offload so repo workflows can run in parallel.
-        ok, message = await asyncio.to_thread(
+        failures = await asyncio.to_thread(
             partial(
                 wait_for_ci,
                 pr_url,
                 token=token,
                 cfg=cfg,
                 expected_head_sha=expected_head_sha,
+                fail_fast_on_failure=fail_fast_on_failure,
             )
         )
-        if ok:
-            logger.info("[ci] %s", message)
+        if not failures:
+            logger.info("[ci] all checks passed for %s", pr_url)
             ctx.state.ci_passed = True
             from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 
             return CleanupRepo(repo_url=self.repo_url)
 
-        attempts = ctx.state.ci_attempts.get(self.repo_url, 0)
-        max_attempts = _max_ci_attempts()
         logger.warning(
-            "[ci] failure (attempt %s/%s) %s (details stored for agent; bytes=%s)",
+            "[ci] failure (attempt %s/%s) %s",
             attempts,
             max_attempts,
-            _summarize_ci_message(message),
-            len(message.encode("utf-8", errors="ignore")),
+            _summarize_ci_failures(failures),
         )
 
         if attempts < max_attempts:
             ctx.state.ci_attempts[self.repo_url] = attempts + 1
-            ctx.state.ci_pending[self.repo_url] = message
+            ctx.state.ci_failures[self.repo_url] = failures
             from pr_creator.workflows.repo_change.apply_step.node import ApplyChanges
 
             return ApplyChanges(repo_url=self.repo_url)
@@ -105,6 +109,10 @@ class WaitForActions(BaseNode):
             max_attempts,
         )
         ctx.state.ci_passed = False
-        from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
+        # Capture the final CI failure list so we can summarize it (one summary per failed check).
+        ctx.state.ci_failures[self.repo_url] = failures
+        from pr_creator.workflows.repo_change.summarize_ci_step.node import (
+            SummarizeCiFailures,
+        )
 
-        return CleanupRepo(repo_url=self.repo_url)
+        return SummarizeCiFailures(repo_url=self.repo_url)

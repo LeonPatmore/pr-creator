@@ -49,5 +49,6 @@ async def record_results(
                         "pushed_sha": r.pushed_sha,
                         "changes_pushed": r.changes_pushed,
                         "ci_passed": r.ci_passed,
+                        "ci_failure_summaries": r.ci_failure_summaries,
                     }
                 )

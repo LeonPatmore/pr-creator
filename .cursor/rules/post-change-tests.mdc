@@ -2,4 +2,10 @@
 description: ONLY Apply this rule when code changes have been made to the python code.
 alwaysApply: false
 ---
-After each Python code change, run in order: `pipenv run flake8` -> `pipenv run black .` -> `pipenv run pytest --ignore=tests/test_cli_e2e.py`; ensure tests pass before proceeding.
+After each Python code change, run in order:
+
+- `pipenv run flake8`
+- `pipenv run black .`
+- `pipenv run pytest -m 'not e2e'`
+
+Ensure these non-e2e tests pass before proceeding. Do not run e2e tests by default.

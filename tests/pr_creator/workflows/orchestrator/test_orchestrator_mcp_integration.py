@@ -4,16 +4,23 @@ import json
 import logging
 import os
 import tempfile
+import time
+import sys
+import faulthandler
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import anyio
 import pytest
 
 from pr_creator.workflows.orchestrator.state import OrchestratorState
 from pr_creator.workflows.orchestrator.workflow import run_orchestrator_workflow
 
 logger = logging.getLogger(__name__)
+
+# This module spins up Docker containers and may call real LLMs; treat as e2e.
+pytestmark = pytest.mark.e2e
 
 
 @dataclass
@@ -238,7 +245,7 @@ async def test_orchestrator_workflow_with_github_mcp():
 
 
 @pytest.mark.anyio
-async def test_orchestrator_explores_repo_via_mcp():
+async def test_orchestrator_explores_repo_via_mcp(caplog):
     """
     Integration test: orchestrator uses MCP to explore a specific repository.
 
@@ -261,6 +268,9 @@ async def test_orchestrator_explores_repo_via_mcp():
 
     mcp_config_path = create_github_mcp_config(github_token)
 
+    # Capture debug logs to help identify what hangs (MCP server startup vs LLM vs workflow).
+    caplog.set_level(logging.DEBUG)
+
     with tempfile.TemporaryDirectory() as working_dir:
         try:
             state = OrchestratorState(
@@ -277,8 +287,45 @@ async def test_orchestrator_explores_repo_via_mcp():
                 mcp_config_path=mcp_config_path,
             )
 
-            logger.info("Running orchestrator to explore repo: %s", test_repo)
-            final_state = await run_orchestrator_workflow(state)
+            timeout_s = int(os.environ.get("MCP_TEST_TIMEOUT_SECONDS", "180"))
+            logger.info(
+                "Running orchestrator to explore repo via MCP: repo=%s timeout_s=%s model=%s mcp_config=%s",
+                test_repo,
+                timeout_s,
+                os.environ.get("ORCHESTRATOR_MODEL", "<default>"),
+                str(mcp_config_path),
+            )
+
+            start = time.monotonic()
+            # If the test is hanging, print Python stack traces automatically so we can see
+            # *exactly* where the await is stuck (toolset startup vs agent.run vs network).
+            faulthandler.enable(file=sys.stderr, all_threads=True)
+            stack_dump_s = int(os.environ.get("MCP_TEST_STACK_DUMP_SECONDS", "10"))
+            # Dump stacks while we're still "in the hang", not just at the final timeout.
+            if stack_dump_s > 0 and stack_dump_s < timeout_s:
+                faulthandler.dump_traceback_later(
+                    stack_dump_s, repeat=True, file=sys.stderr
+                )
+            try:
+                # If this hangs, we want a deterministic failure and logs.
+                with anyio.fail_after(timeout_s):
+                    logger.info("[mcp-test] starting run_orchestrator_workflow()")
+                    final_state = await run_orchestrator_workflow(state)
+                    logger.info("[mcp-test] run_orchestrator_workflow() returned")
+            except TimeoutError:
+                elapsed = time.monotonic() - start
+                tail = (caplog.text or "")[-8000:]
+                # Dump current stacks immediately in addition to the periodic dump.
+                faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+                logger.error(
+                    "[mcp-test] timed out after %.1fs (timeout=%ss). Recent logs tail:\n%s",
+                    elapsed,
+                    timeout_s,
+                    tail,
+                )
+                raise
+            finally:
+                faulthandler.cancel_dump_traceback_later()
 
             logger.info("✅ Repository exploration completed")
             logger.info("  - Processed repo: %s", test_repo)

@@ -174,7 +174,7 @@ class ApplyChanges(BaseNode):
         prompt = build_guarded_change_prompt(
             repo_specific_prompt=ctx.state.prompt,
             base_prompt=ctx.state.base_prompt,
-            ci_feedback=ctx.state.ci_pending.pop(self.repo_url, "").strip(),
+            ci_failures=ctx.state.ci_failures.pop(self.repo_url, []),
             review_feedback=ctx.state.review_pending.pop(self.repo_url, "").strip(),
         )
 

@@ -14,6 +14,7 @@ from pr_creator.workflows.repo_change.cleanup_step.node import CleanupRepo
 from pr_creator.workflows.repo_change.naming_step.node import GenerateNames
 from pr_creator.workflows.repo_change.review_step.node import ReviewChanges
 from pr_creator.workflows.repo_change.submit_step.node import SubmitChanges
+from pr_creator.workflows.repo_change.summarize_ci_step.node import SummarizeCiFailures
 from pr_creator.workflows.repo_change.wait_for_actions_step.node import WaitForActions
 from pr_creator.workflows.repo_change.workspace_step.node import WorkspaceRepo
 
@@ -33,6 +34,7 @@ def build_repo_change_single_repo_graph() -> Graph:
             ReviewChanges,
             SubmitChanges,
             WaitForActions,
+            SummarizeCiFailures,
             CleanupRepo,
         ],
         state_type=RepoChangeState,

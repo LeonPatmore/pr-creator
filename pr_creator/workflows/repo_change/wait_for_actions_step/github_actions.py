@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from pr_creator.retry_utils import retry_on_exception
+from pr_creator.workflows.repo_change.ci_types import CiFailure
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,84 @@ class CiWaitConfig:
     max_log_bytes: int = 5_000_000
     max_log_chars: int = 30_000
     acceptable_conclusions: Tuple[str, ...] = ("success", "skipped", "neutral")
+
+
+def _check_run_logs(cr: Dict[str, Any]) -> str:
+    output = cr.get("output") or {}
+    summary = (output.get("summary") or "").strip()
+    text = (output.get("text") or "").strip()
+    parts: list[str] = []
+    if summary:
+        parts.append(summary)
+    if text and text != summary:
+        parts.append(text)
+    return "\n\n".join(parts).strip()
+
+
+def _status_context_logs(st: Dict[str, Any]) -> str:
+    parts: list[str] = []
+    state = str(st.get("state") or "").strip()
+    ctx = str(st.get("context") or "").strip()
+    desc = str(st.get("description") or "").strip()
+    if ctx:
+        parts.append(f"context: {ctx}")
+    if state:
+        parts.append(f"state: {state}")
+    if desc:
+        parts.append(desc)
+    return "\n".join(parts).strip()
+
+
+def _build_failures(
+    *,
+    pr_url: str,
+    sha: str,
+    failed_check_runs: List[Dict[str, Any]],
+    failed_statuses: List[Dict[str, Any]],
+    combined_state: str,
+) -> List[CiFailure]:
+    failures: list[CiFailure] = []
+    for cr in failed_check_runs:
+        name = str(cr.get("name") or cr.get("app", {}).get("name") or "check")
+        details_url = (cr.get("details_url") or None) if isinstance(cr, dict) else None
+        logs = _check_run_logs(cr)
+        failures.append(
+            CiFailure(
+                pr_url=pr_url,
+                head_sha=sha,
+                name=name,
+                details_url=str(details_url) if details_url else None,
+                logs=logs,
+            )
+        )
+    for st in failed_statuses:
+        name = str(st.get("context") or st.get("description") or "status")
+        details_url = st.get("target_url") or None
+        logs = _status_context_logs(st)
+        failures.append(
+            CiFailure(
+                pr_url=pr_url,
+                head_sha=sha,
+                name=name,
+                details_url=str(details_url) if details_url else None,
+                logs=logs,
+            )
+        )
+    if (
+        not failed_check_runs
+        and not failed_statuses
+        and combined_state in ("failure", "error")
+    ):
+        failures.append(
+            CiFailure(
+                pr_url=pr_url,
+                head_sha=sha,
+                name="commit_status",
+                details_url=None,
+                logs=f"combined_status={combined_state}",
+            )
+        )
+    return failures
 
 
 def _env_int(name: str, default: int) -> int:
@@ -230,7 +309,6 @@ def _failed_check_runs(
 
 def _has_pending(
     check_runs: Iterable[Dict[str, Any]],
-    combined_state: str,
     statuses: Iterable[Dict[str, Any]],
 ) -> bool:
     # Prefer concrete signals over the summary combined_state. GitHub can report
@@ -361,57 +439,6 @@ def _build_ci_summary(
     return f"{checks_summary} {statuses_summary}"
 
 
-def fetch_failed_logs_snippet(
-    owner: str,
-    repo: str,
-    failed_check_runs: List[Dict[str, Any]],
-    *,
-    token: str,
-    cfg: CiWaitConfig,
-) -> str:
-    parts: list[str] = []
-    for cr in failed_check_runs:
-        name = cr.get("name") or cr.get("app", {}).get("name") or "check"
-        conclusion = cr.get("conclusion") or "unknown"
-        details_url = cr.get("details_url") or ""
-        output = cr.get("output") or {}
-        summary = (output.get("summary") or "").strip()
-        text = (output.get("text") or "").strip()
-
-        parts.append(
-            f"### Failed check: {name}\n- conclusion: {conclusion}\n- details: {details_url}\n"
-        )
-        if summary:
-            parts.append(f"#### Output summary\n{summary}\n")
-        if text and text != summary:
-            parts.append(f"#### Output text\n{text}\n")
-
-        run_id, job_id = _parse_actions_ids(details_url)
-        try:
-            if job_id:
-                data = _get_bytes_follow_redirect(
-                    f"{_api_base(owner, repo)}/actions/jobs/{job_id}/logs",
-                    token=token,
-                    max_bytes=cfg.max_log_bytes,
-                )
-                extracted = _extract_zip_text(data, max_chars=cfg.max_log_chars)
-                if extracted.strip():
-                    parts.append("#### Job logs\n" + extracted + "\n")
-            elif run_id:
-                data = _get_bytes_follow_redirect(
-                    f"{_api_base(owner, repo)}/actions/runs/{run_id}/logs",
-                    token=token,
-                    max_bytes=cfg.max_log_bytes,
-                )
-                extracted = _extract_zip_text(data, max_chars=cfg.max_log_chars)
-                if extracted.strip():
-                    parts.append("#### Run logs\n" + extracted + "\n")
-        except Exception as exc:
-            logger.warning("[ci] failed to download logs for %s: %s", details_url, exc)
-
-    return "\n".join(parts).strip()
-
-
 @dataclass
 class _CiWaitState:
     last_heartbeat: float = 0.0
@@ -524,10 +551,11 @@ def wait_for_ci(
     token: str,
     cfg: CiWaitConfig,
     expected_head_sha: str | None = None,
-) -> Tuple[bool, str]:
+    fail_fast_on_failure: bool = True,
+) -> List[CiFailure]:
     parsed = parse_pr_url(pr_url)
     if not parsed:
-        return True, f"[ci] skipping wait: could not parse PR url: {pr_url}"
+        return []
     owner, repo, pr_number = parsed
 
     deadline = time.time() + cfg.timeout_seconds
@@ -536,8 +564,13 @@ def wait_for_ci(
     start_monotonic = time.monotonic()
     state = _CiWaitState()
 
+    last_failed_check_runs: list[Dict[str, Any]] = []
+    last_failed_statuses: list[Dict[str, Any]] = []
+    last_sha: str = ""
+
     while time.time() < deadline:
         sha = get_pr_head_sha(owner, repo, pr_number, token=token)
+        last_sha = sha
 
         if expected_head_sha and sha != expected_head_sha:
             last_state = "waiting_for_pr_head_update"
@@ -562,12 +595,21 @@ def wait_for_ci(
             owner, repo, sha, token=token
         )
 
-        pending = _has_pending(check_runs, combined_state, statuses)
-        failed = _failed_check_runs(check_runs, cfg.acceptable_conclusions)
+        pending = _has_pending(check_runs, statuses)
+        failed_check_runs = _failed_check_runs(check_runs, cfg.acceptable_conclusions)
+        failed_statuses = [
+            st
+            for st in statuses
+            if str(st.get("state") or "").lower() in ("failure", "error")
+        ]
+        if failed_check_runs:
+            last_failed_check_runs = failed_check_runs
+        if failed_statuses:
+            last_failed_statuses = failed_statuses
 
         last_state = combined_state
         last_counts = _build_ci_summary(
-            check_runs, statuses, failed, cfg.acceptable_conclusions
+            check_runs, statuses, failed_check_runs, cfg.acceptable_conclusions
         )
 
         timeout_result = _check_pending_without_checks_timeout(
@@ -581,15 +623,13 @@ def wait_for_ci(
         if timeout_result:
             return timeout_result
 
-        if check_runs and failed:
-            snippet = fetch_failed_logs_snippet(
-                owner, repo, failed, token=token, cfg=cfg
-            )
-            return False, (
-                "CI failed for this PR.\n\n"
-                f"- PR: {pr_url}\n"
-                f"- head_sha: {sha}\n"
-                f"- summary: {last_counts}\n\n" + (snippet or "No logs available.")
+        if failed_check_runs and fail_fast_on_failure:
+            return _build_failures(
+                pr_url=pr_url,
+                sha=sha,
+                failed_check_runs=failed_check_runs,
+                failed_statuses=failed_statuses,
+                combined_state=combined_state,
             )
 
         if pending or combined_state == "pending":
@@ -603,36 +643,51 @@ def wait_for_ci(
                     combined_state=combined_state,
                     check_runs=check_runs,
                     statuses=statuses,
-                    failed=failed,
+                    failed=failed_check_runs,
                     elapsed_s=elapsed,
                 ),
             )
 
         if not pending:
             if check_runs:
-                return True, f"[ci] all checks passed for {pr_url} ({last_counts})"
-            if combined_state == "success":
-                return (
-                    True,
-                    f"[ci] no check-runs found; combined status is success for {pr_url}",
+                return _build_failures(
+                    pr_url=pr_url,
+                    sha=sha,
+                    failed_check_runs=last_failed_check_runs,
+                    failed_statuses=last_failed_statuses,
+                    combined_state=combined_state,
                 )
+            if combined_state == "success":
+                return []
             if combined_state in ("failure", "error"):
-                return False, (
-                    "CI failed for this PR (commit status).\n\n"
-                    f"- PR: {pr_url}\n"
-                    f"- head_sha: {sha}\n"
-                    f"- status: {combined_state}\n"
+                return _build_failures(
+                    pr_url=pr_url,
+                    sha=sha,
+                    failed_check_runs=[],
+                    failed_statuses=failed_statuses,
+                    combined_state=combined_state,
                 )
 
         time.sleep(cfg.poll_seconds)
 
-    expected_line = (
-        f"- expected_head_sha: {expected_head_sha}\n" if expected_head_sha else ""
+    expected = f"expected_head_sha={expected_head_sha}" if expected_head_sha else ""
+    logs = "\n".join(
+        [
+            p
+            for p in (
+                expected,
+                f"last_state={last_state}",
+                f"last_observed={last_counts}",
+            )
+            if p
+        ]
     )
-    return False, (
-        "Timed out waiting for CI / GitHub Actions.\n\n"
-        f"- PR: {pr_url}\n"
-        f"{expected_line}"
-        f"- last_state: {last_state}\n"
-        f"- last_observed: {last_counts}\n"
-    )
+    return [
+        CiFailure(
+            pr_url=pr_url,
+            head_sha=last_sha,
+            name="ci_wait_timeout",
+            details_url=None,
+            logs=logs,
+        )
+    ]

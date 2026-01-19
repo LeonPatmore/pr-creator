@@ -11,6 +11,8 @@ from typing import Optional, Tuple
 import pytest
 from github import Auth, Github
 
+pytestmark = pytest.mark.e2e
+
 
 def _parse_owner_repo(repo_url: str) -> Optional[Tuple[str, str]]:
     cleaned = repo_url.rstrip("/").removesuffix(".git")

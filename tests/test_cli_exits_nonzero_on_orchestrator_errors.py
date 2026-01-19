@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -37,14 +36,17 @@ def test_cli_exits_nonzero_when_orchestrator_errors_present(
     )
     monkeypatch.setattr(cli, "parse_args", lambda: args)
 
-    async def _fake_run_orchestrator_workflow(state: OrchestratorState) -> OrchestratorState:
+    async def _fake_run_orchestrator_workflow(
+        state: OrchestratorState,
+    ) -> OrchestratorState:
         state.orchestrator_errors.append("boom")
         return state
 
-    monkeypatch.setattr(cli, "run_orchestrator_workflow", _fake_run_orchestrator_workflow)
+    monkeypatch.setattr(
+        cli, "run_orchestrator_workflow", _fake_run_orchestrator_workflow
+    )
     monkeypatch.setattr(cli, "_print_workflow_summary", lambda *_args, **_kwargs: None)
 
     with pytest.raises(SystemExit) as e:
         cli.main()
     assert e.value.code == 1
-

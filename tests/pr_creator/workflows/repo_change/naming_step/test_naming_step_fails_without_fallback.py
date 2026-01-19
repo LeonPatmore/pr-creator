@@ -9,7 +9,9 @@ from pr_creator.workflows.repo_change.naming_step.node import GenerateNames
 from pr_creator.workflows.repo_change.state import RepoChangeState
 
 
-def test_naming_step_raises_when_agent_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_naming_step_raises_when_agent_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Agent:
         async def generate_short_desc(self, _prompt: str) -> str | None:
             return None
@@ -33,4 +35,3 @@ def test_naming_step_raises_when_agent_returns_none(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(RuntimeError, match=r"\[naming\] generation failed"):
         asyncio.run(GenerateNames(repo_url=repo_url).run(_Ctx(state)))
-

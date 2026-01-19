@@ -124,14 +124,16 @@ Docker runner only (`CURSOR_RUNNER=docker`):
 CLI runner only (`CURSOR_RUNNER=cli`):
 - `CURSOR_CLI_BIN` — cursor-agent binary name/path (default: `cursor-agent`).
 - `CURSOR_WORKSPACE_ROOT` — workspace root passed to cursor-agent (default: common path of repo + context roots).
-- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: `600` (10 minutes). Set to `0` to disable.
+- `CURSOR_AGENT_TIMEOUT_SECONDS` — hard timeout for a single cursor-agent run; if exceeded the process is killed. Default: `900` (15 minutes). Set to `0` to disable.
 - `CURSOR_AGENT_HEARTBEAT_SECONDS` — emit a “still running” message when no output is seen for this many seconds (default: `30`).
 
 **Orchestration**
 - `ORCHESTRATOR_MODEL` — pydantic-ai model used by the orchestration step; default `openai:gpt-5.2`.
-- `LITELLM_API_BASE` — LiteLLM API base URL (e.g., `http://localhost:4000`). If set, the orchestrator will use LiteLLM as a proxy to access various LLM providers.
-- `LITELLM_API_KEY` — LiteLLM API key for authentication. Required when `LITELLM_API_BASE` is set.
 - `MAX_PARALLEL_REPOS` — maximum number of repositories to process concurrently during orchestration; default `3`. Increase for faster processing of many repos, decrease to reduce resource usage.
+
+**LiteLLM (optional)**
+- `LITELLM_API_BASE` — LiteLLM API base URL (e.g., `http://localhost:4000`). If set, pydantic-ai agents (e.g., orchestrator + CI summarizer) will use LiteLLM as a proxy to access various LLM providers.
+- `LITELLM_API_KEY` — LiteLLM API key for authentication. Required when `LITELLM_API_BASE` is set.
 
 **MCP servers (optional)**
 - `MCP_CONFIG` — path to MCP servers configuration file (JSON format). Defaults to `~/.pr-creator/mcp-servers.json` if that file exists. If provided (via env or CLI), the orchestrator will load MCP servers as tools, enabling it to access external resources like GitHub repositories for planning context.
@@ -197,6 +199,7 @@ CLI runner only (`CURSOR_RUNNER=cli`):
 - `CI_ACCEPTABLE_CONCLUSIONS` — comma-separated conclusions treated as “passing” (default: `success,skipped,neutral`).
 - `CI_MAX_LOG_BYTES` — max bytes to download from a logs archive (default: `5000000`).
 - `CI_MAX_LOG_CHARS` — max characters of extracted logs included in the prompt (default: `30000`).
+- `CI_SUMMARY_MODEL` — pydantic-ai model used to summarize CI failures (one per failed check) after CI retries are exhausted (default: `openai:gpt-5.2`).
 
 **Logging & git identity**
 - `LOG_LEVEL` — logging level; default `INFO`.

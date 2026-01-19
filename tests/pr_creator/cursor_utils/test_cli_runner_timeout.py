@@ -60,4 +60,4 @@ async def test_cli_runner_uses_default_timeout_when_env_unset(monkeypatch):
         extra_env={},
     )
 
-    assert called["kwargs"]["timeout"] == 600.0
+    assert called["kwargs"]["timeout"] == 900.0

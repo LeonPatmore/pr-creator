@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from pr_creator.workflows.repo_change.ci_types import CiFailure
+
 
 @dataclass
 class RepoChangeState:
@@ -53,7 +55,9 @@ class RepoChangeState:
     naming_attempts: Dict[str, int] = field(default_factory=dict)
     # Number of apply (change agent) attempts per repo_url.
     apply_attempts: Dict[str, int] = field(default_factory=dict)
-    # CI/action failure output that should be applied on the next ApplyChanges pass.
-    ci_pending: Dict[str, str] = field(default_factory=dict)
+    # CI failures for this repo (used both for CI-fix retries and final summarization).
+    ci_failures: Dict[str, List[CiFailure]] = field(default_factory=dict)
     # Number of ci->apply retries attempted per repo_url.
     ci_attempts: Dict[str, int] = field(default_factory=dict)
+    # AI summaries of CI failures (one per failed check), keyed by repo_url.
+    ci_failure_summaries: Dict[str, List[str]] = field(default_factory=dict)

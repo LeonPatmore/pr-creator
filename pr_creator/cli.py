@@ -43,6 +43,11 @@ def _print_workflow_summary(final_state, summary: dict) -> None:
                 print("    CI:      ✓ Passed")
             elif ci_passed is False:
                 print("    CI:      ✗ Failed")
+                summaries = pr.get("ci_failure_summaries") or []
+                if summaries:
+                    print("    CI summaries:")
+                    for s in summaries:
+                        print(f"      - {s}")
             # If None, don't show anything (CI not waited for)
     else:
         print("\n✗ No PRs created")

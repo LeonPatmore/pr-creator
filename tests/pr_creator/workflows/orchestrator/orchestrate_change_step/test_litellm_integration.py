@@ -1,4 +1,5 @@
 import os
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,15 +7,19 @@ import pytest
 from pr_creator.workflows.orchestrator.orchestrate_change_step.agent import (
     build_orchestrate_change_agent,
 )
-from pr_creator.workflows.orchestrator.orchestrate_change_step.model_builder import (
-    build_model,
-)
+from pr_creator.model_builder import build_model
 from pydantic_ai.models.openai import OpenAIChatModel
 
 
 def test_build_model_without_litellm():
     with patch.dict(os.environ, {}, clear=True):
-        model = build_model("openai:gpt-5.2")
+        model = build_model(
+            "openai:gpt-5.2",
+            log_prefix="orchestrator",
+            log=logging.getLogger(
+                "pr_creator.workflows.orchestrator.orchestrate_change_step.agent"
+            ),
+        )
         assert model == "openai:gpt-5.2"
         assert isinstance(model, str)
 
@@ -27,7 +32,13 @@ def test_build_model_with_litellm_missing_api_key(caplog):
         },
         clear=True,
     ):
-        model = build_model("openai:gpt-5.2")
+        model = build_model(
+            "openai:gpt-5.2",
+            log_prefix="orchestrator",
+            log=logging.getLogger(
+                "pr_creator.workflows.orchestrator.orchestrate_change_step.agent"
+            ),
+        )
         assert model == "openai:gpt-5.2"
         assert isinstance(model, str)
         assert "LITELLM_API_KEY is not set" in caplog.text
@@ -52,10 +63,16 @@ def test_build_model_with_litellm_configured(caplog):
         ),
         caplog.at_level(
             "INFO",
-            logger="pr_creator.workflows.orchestrator.orchestrate_change_step.model_builder",
+            logger="pr_creator.workflows.orchestrator.orchestrate_change_step.agent",
         ),
     ):
-        model = build_model("openai:gpt-5.2")
+        model = build_model(
+            "openai:gpt-5.2",
+            log_prefix="orchestrator",
+            log=logging.getLogger(
+                "pr_creator.workflows.orchestrator.orchestrate_change_step.agent"
+            ),
+        )
         assert isinstance(model, OpenAIChatModel)
         assert "using LiteLLM provider with model openai/gpt-5.2" in caplog.text
 
@@ -88,7 +105,13 @@ def test_build_model_transforms_model_name_for_litellm():
         ]
 
         for input_name, expected_litellm_name in test_cases:
-            model = build_model(input_name)
+            model = build_model(
+                input_name,
+                log_prefix="orchestrator",
+                log=logging.getLogger(
+                    "pr_creator.workflows.orchestrator.orchestrate_change_step.agent"
+                ),
+            )
             assert isinstance(model, OpenAIChatModel)
 
 
@@ -109,7 +132,13 @@ def test_build_model_with_litellm_import_error(caplog):
             {"pydantic_ai.providers.litellm": None},
         ),
     ):
-        model = build_model("openai:gpt-5.2")
+        model = build_model(
+            "openai:gpt-5.2",
+            log_prefix="orchestrator",
+            log=logging.getLogger(
+                "pr_creator.workflows.orchestrator.orchestrate_change_step.agent"
+            ),
+        )
         assert model == "openai:gpt-5.2"
         assert isinstance(model, str)
         assert "LiteLLM support not available" in caplog.text

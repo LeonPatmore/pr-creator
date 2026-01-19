@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pr_creator.workflows.repo_change.ci_types import CiFailure
+
 
 def build_change_prompt(
     *,
     repo_specific_prompt: str,
     base_prompt: str | None,
-    ci_feedback: str,
+    ci_failures: list[CiFailure],
     review_feedback: str,
 ) -> str:
     """
@@ -20,12 +22,31 @@ def build_change_prompt(
 
     sections: list[str] = []
 
-    if ci_feedback:
+    if ci_failures:
+        # The apply step is responsible for formatting CI failures for the change agent.
+        # Keep this concise and structured; detailed investigation should follow links/logs.
+        failure_lines: list[str] = []
+        for f in ci_failures:
+            details = f.details_url or ""
+            logs = (f.logs or "").strip()
+            failure_lines.append(
+                "\n".join(
+                    [
+                        f"### Failed check: {f.name}",
+                        f"- pr_url: {f.pr_url}",
+                        f"- head_sha: {f.head_sha}",
+                        f"- details_url: {details}",
+                        "#### Logs",
+                        logs or "No logs available.",
+                    ]
+                )
+            )
+        ci_section = "\n\n".join(failure_lines).strip()
         sections.append(
             "## CRITICAL: Fix failing CI / GitHub Actions\n"
             "The PR is failing CI. Use the logs below to fix the issue.\n"
             "If there is a conflict, prioritize this section.\n\n"
-            f"{ci_feedback}\n"
+            f"{ci_section}\n"
         )
 
     if review_feedback:
@@ -158,14 +179,14 @@ def build_guarded_change_prompt(
     *,
     repo_specific_prompt: str,
     base_prompt: str | None,
-    ci_feedback: str,
+    ci_failures: list[CiFailure],
     review_feedback: str,
 ) -> str:
     return guard_change_agent_prompt(
         build_change_prompt(
             repo_specific_prompt=repo_specific_prompt,
             base_prompt=base_prompt,
-            ci_feedback=ci_feedback,
+            ci_failures=ci_failures,
             review_feedback=review_feedback,
         )
     )
