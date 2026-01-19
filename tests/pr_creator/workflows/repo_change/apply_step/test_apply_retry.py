@@ -18,7 +18,7 @@ async def test_apply_changes_retries_on_failure(tmp_path: Path):
 
     # Create initial state
     state = RepoChangeState(
-        prompt="Make changes",
+        additional_prompt="Make changes",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         apply_attempts={},
@@ -91,7 +91,7 @@ async def test_apply_changes_raises_after_max_attempts(tmp_path: Path):
 
     # Create initial state
     state = RepoChangeState(
-        prompt="Make changes",
+        additional_prompt="Make changes",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         apply_attempts={},
@@ -145,7 +145,7 @@ async def test_apply_changes_success_first_try(tmp_path: Path):
 
     # Create initial state
     state = RepoChangeState(
-        prompt="Make changes",
+        additional_prompt="Make changes",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         apply_attempts={},
@@ -223,7 +223,7 @@ async def test_apply_changes_uses_backoff_between_retries(tmp_path: Path):
 
     # Create initial state
     state = RepoChangeState(
-        prompt="Make changes",
+        additional_prompt="Make changes",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         apply_attempts={},

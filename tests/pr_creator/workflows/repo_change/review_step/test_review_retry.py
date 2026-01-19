@@ -13,7 +13,7 @@ from pr_creator.workflows.repo_change.state import RepoChangeState
 async def test_review_step_retries_on_unexpected_error(tmp_path: Path):
     repo_url = "https://github.com/test/repo"
     state = RepoChangeState(
-        prompt="Do stuff",
+        additional_prompt="Do stuff",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         review_step_attempts={},
@@ -79,7 +79,7 @@ async def test_review_step_retries_on_unexpected_error(tmp_path: Path):
 async def test_review_changes_required_loop_capped_at_two(tmp_path: Path, monkeypatch):
     repo_url = "https://github.com/test/repo"
     state = RepoChangeState(
-        prompt="Do stuff",
+        additional_prompt="Do stuff",
         working_dir=tmp_path,
         cloned={repo_url: tmp_path},
         review_attempts={},

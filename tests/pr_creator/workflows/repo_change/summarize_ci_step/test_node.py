@@ -50,7 +50,7 @@ async def test_summarize_ci_failures_runs_once_per_failed_check(monkeypatch):
 
     monkeypatch.setattr(summarize_node, "build_ci_failure_summarizer", _fake_summarizer)
 
-    state = RepoChangeState(prompt="x", working_dir=Path("/tmp"))
+    state = RepoChangeState(additional_prompt="x", working_dir=Path("/tmp"))
     state.ci_failures[repo_url] = failures
     ctx = _Ctx(state)
 

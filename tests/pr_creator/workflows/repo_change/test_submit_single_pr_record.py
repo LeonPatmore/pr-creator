@@ -10,7 +10,7 @@ async def test_submit_changes_sets_created_pr_once_and_asserts_same_pr(
 ):
     repo_url = "https://github.com/example/example"
 
-    state = RepoChangeState(prompt="p", working_dir=tmp_path)
+    state = RepoChangeState(additional_prompt="p", working_dir=tmp_path)
     state.cloned[repo_url] = tmp_path
     state.branches[repo_url] = "my-branch"
     state.pr_titles[repo_url] = "title"
@@ -60,7 +60,7 @@ async def test_submit_changes_sets_created_pr_once_and_asserts_same_pr(
 async def test_submit_changes_asserts_if_pr_url_changes(monkeypatch, tmp_path):
     repo_url = "https://github.com/example/example"
 
-    state = RepoChangeState(prompt="p", working_dir=tmp_path)
+    state = RepoChangeState(additional_prompt="p", working_dir=tmp_path)
     state.cloned[repo_url] = tmp_path
     state.branches[repo_url] = "my-branch"
 

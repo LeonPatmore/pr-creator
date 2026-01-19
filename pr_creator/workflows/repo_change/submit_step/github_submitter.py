@@ -242,11 +242,19 @@ def _wait_for_remote_branch(
     ) from last_exc
 
 
-def _build_pr_body(base_body: str, change_prompt: Optional[str]) -> str:
-    """Build PR body with optional change prompt."""
-    if change_prompt:
-        return f"{base_body}\n\n## Change Prompt\n\n{change_prompt}"
-    return base_body
+def _build_pr_body(
+    base_body: str, base_prompt: Optional[str], change_prompt: Optional[str]
+) -> str:
+    """Build PR body with base prompt and optional repo-specific change prompt."""
+    sections = [base_body]
+
+    if base_prompt and base_prompt.strip():
+        sections.append(f"## Original Request\n\n{base_prompt.strip()}")
+
+    if change_prompt and change_prompt.strip():
+        sections.append(f"## Repository-Specific Context\n\n{change_prompt.strip()}")
+
+    return "\n\n".join(sections)
 
 
 def _get_remote_repo_and_base_branch(
@@ -491,6 +499,7 @@ class GithubSubmitter(SubmitChange):
         self,
         repo_path: Path,
         change_prompt: str | None = None,
+        base_prompt: str | None = None,
         change_id: str | None = None,
         branch: str | None = None,
         pr_title: str | None = None,
@@ -514,7 +523,7 @@ class GithubSubmitter(SubmitChange):
             origin, self._gh, self.base_branch
         )
 
-        pr_body = _build_pr_body(self.pr_body, change_prompt)
+        pr_body = _build_pr_body(self.pr_body, base_prompt, change_prompt)
         pr_title_final = pr_title or "Automated changes"
         commit_message_final = commit_message or "Automated changes"
 

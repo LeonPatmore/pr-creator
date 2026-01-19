@@ -30,7 +30,7 @@ async def repo_change_tool(
 
     assert ctx.state.working_dir is not None
     repo_state = RepoChangeState(
-        prompt=additional_prompt,
+        additional_prompt=additional_prompt,
         working_dir=Path(ctx.state.working_dir),
         github_token=ctx.state.github_token,
         context_roots=list(ctx.state.context_roots or []),

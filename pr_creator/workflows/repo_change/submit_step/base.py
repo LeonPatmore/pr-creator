@@ -11,6 +11,7 @@ class SubmitChange(ABC):
         self,
         repo_path: Path,
         change_prompt: str | None = None,
+        base_prompt: str | None = None,
         change_id: str | None = None,
         branch: str | None = None,
     ) -> Optional[Dict[str, str]]:
@@ -18,7 +19,8 @@ class SubmitChange(ABC):
 
         Args:
             repo_path: Path to the repository
-            change_prompt: The prompt that triggered the change (for PR description)
+            change_prompt: Repo-specific additional prompt (for PR description)
+            base_prompt: Original base prompt from user/CLI (for PR description)
             change_id: Optional change ID for static branch names
             branch: Optional branch name to submit from (will be checked out before committing)
 

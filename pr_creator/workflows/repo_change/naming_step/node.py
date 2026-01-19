@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pydantic_graph import BaseNode, End, GraphRunContext
 
 from pr_creator.retry_utils import RetryConfig
-from pr_creator.workflows.repo_change.naming_step.naming_agents import get_naming_agent
+from pr_creator.workflows.repo_change.naming_step.agent import build_naming_agent
 from pr_creator.workflows.repo_change.naming_step.naming_utils import (
     limit_slug,
     slugify,
@@ -16,8 +16,6 @@ from pr_creator.workflows.repo_change.naming_step.naming_utils import (
 )
 
 logger = logging.getLogger(__name__)
-
-_agent = get_naming_agent()
 
 # Naming retry configuration
 _naming_retry_config = RetryConfig(env_prefix="NAMING")
@@ -34,13 +32,16 @@ class GenerateNames(BaseNode):
         max_attempts = _naming_retry_config.get_max_attempts()
 
         logger.info(
-            "[naming] agent=%s max_attempts=%s current_attempts=%s",
-            type(_agent).__name__,
+            "[naming] max_attempts=%s current_attempts=%s",
             max_attempts,
             attempts,
         )
 
-        short_desc = await _agent.generate_short_desc(ctx.state.prompt)
+        async with build_naming_agent() as generate_short_desc:
+            # Use base_prompt for naming (contains original user intent).
+            # ctx.state.additional_prompt may be empty if orchestrator passed no additional context.
+            naming_prompt = ctx.state.base_prompt or ctx.state.additional_prompt
+            short_desc = await generate_short_desc(naming_prompt)
 
         if short_desc is None:
             if attempts < max_attempts:

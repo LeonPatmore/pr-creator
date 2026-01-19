@@ -64,10 +64,12 @@ class ReviewChanges(BaseNode):
         )
 
         try:
+            # Use base_prompt for review if additional_prompt is empty (orchestrator passed no additional context)
+            review_prompt = ctx.state.additional_prompt or ctx.state.base_prompt
             needs_changes, feedback = await _agent.review(
                 Path(path),
                 context_roots=ctx.state.context_roots,
-                task_prompt=ctx.state.prompt,
+                task_prompt=review_prompt,
                 secrets=ctx.state.change_agent_secrets,
             )
         except Exception as e:

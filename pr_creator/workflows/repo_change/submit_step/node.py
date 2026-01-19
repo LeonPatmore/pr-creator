@@ -26,7 +26,8 @@ class SubmitChanges(BaseNode):
             partial(
                 submitter.submit,
                 path,
-                change_prompt=ctx.state.prompt,
+                change_prompt=ctx.state.additional_prompt,
+                base_prompt=ctx.state.base_prompt,
                 change_id=ctx.state.change_id,
                 branch=ctx.state.branches.get(self.repo_url),
                 pr_title=ctx.state.pr_titles.get(self.repo_url),

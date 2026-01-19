@@ -15,9 +15,10 @@ class RepoChangeState:
     - prompt/discovery/orchestration inputs were handled upstream (e.g. orchestrator)
     """
 
-    prompt: str
+    # Additional repo-specific prompt from orchestrator (can be empty string if no additional context needed)
+    additional_prompt: str
     working_dir: Path
-    # Original base prompt from orchestrator (before repo-specific refinement)
+    # Original full prompt from orchestrator (from CLI, prompt config, or Jira - before repo-specific refinement)
     base_prompt: Optional[str] = None
     # GitHub auth token forwarded from orchestrator (CLI flag wins; otherwise env GITHUB_TOKEN).
     github_token: Optional[str] = None

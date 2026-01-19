@@ -21,16 +21,17 @@ from pr_creator.workspace_mounts import workspace_prompt_prefix
 logger = logging.getLogger(__name__)
 
 _TRUTHY: Final[set[str]] = {"1", "true", "yes", "y", "on"}
+_DEFAULT_TIMEOUT_SECONDS: Final[float] = 1200.0
 
 
 def _get_timeout_seconds() -> float | None:
     raw = (os.environ.get("CURSOR_AGENT_TIMEOUT_SECONDS") or "").strip()
     if not raw:
-        return 900.0
+        return _DEFAULT_TIMEOUT_SECONDS
     try:
         v = float(raw)
     except Exception:
-        return 900.0
+        return _DEFAULT_TIMEOUT_SECONDS
     return v if v > 0 else None
 
 

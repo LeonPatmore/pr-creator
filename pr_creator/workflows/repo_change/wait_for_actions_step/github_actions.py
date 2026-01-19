@@ -46,12 +46,14 @@ def _fetch_actions_job_logs(
 ) -> str:
     """
     Fetch logs from a GitHub Actions job.
-    
+
     Returns empty string if logs cannot be fetched (e.g., job not found, logs expired).
     """
     try:
         logs_url = f"{_api_base(owner, repo)}/actions/jobs/{job_id}/logs"
-        data = _get_bytes_follow_redirect(logs_url, token=token, max_bytes=cfg.max_log_bytes)
+        data = _get_bytes_follow_redirect(
+            logs_url, token=token, max_bytes=cfg.max_log_bytes
+        )
         return _extract_zip_text(data, max_chars=cfg.max_log_chars)
     except Exception as e:
         logger.debug(
@@ -74,7 +76,7 @@ def _check_run_logs(
 ) -> str:
     """
     Extract logs from a check run.
-    
+
     For GitHub Actions check runs, attempts to fetch detailed logs from the Actions API
     if a details_url is present. Falls back to check run output fields otherwise.
     """
@@ -88,7 +90,7 @@ def _check_run_logs(
             )
             if actions_logs:
                 return actions_logs
-    
+
     # Fall back to check run output fields
     output = cr.get("output") or {}
     summary = (output.get("summary") or "").strip()
@@ -131,9 +133,7 @@ def _build_failures(
     for cr in failed_check_runs:
         name = str(cr.get("name") or cr.get("app", {}).get("name") or "check")
         details_url = (cr.get("details_url") or None) if isinstance(cr, dict) else None
-        logs = _check_run_logs(
-            cr, owner=owner, repo=repo, token=token, cfg=cfg
-        )
+        logs = _check_run_logs(cr, owner=owner, repo=repo, token=token, cfg=cfg)
         failures.append(
             CiFailure(
                 pr_url=pr_url,
