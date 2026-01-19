@@ -36,7 +36,60 @@ class CiWaitConfig:
     acceptable_conclusions: Tuple[str, ...] = ("success", "skipped", "neutral")
 
 
-def _check_run_logs(cr: Dict[str, Any]) -> str:
+def _fetch_actions_job_logs(
+    owner: str,
+    repo: str,
+    job_id: str,
+    *,
+    token: str,
+    cfg: CiWaitConfig,
+) -> str:
+    """
+    Fetch logs from a GitHub Actions job.
+    
+    Returns empty string if logs cannot be fetched (e.g., job not found, logs expired).
+    """
+    try:
+        logs_url = f"{_api_base(owner, repo)}/actions/jobs/{job_id}/logs"
+        data = _get_bytes_follow_redirect(logs_url, token=token, max_bytes=cfg.max_log_bytes)
+        return _extract_zip_text(data, max_chars=cfg.max_log_chars)
+    except Exception as e:
+        logger.debug(
+            "[ci] failed to fetch Actions job logs for %s/%s job %s: %s",
+            owner,
+            repo,
+            job_id,
+            e,
+        )
+        return ""
+
+
+def _check_run_logs(
+    cr: Dict[str, Any],
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    token: str | None = None,
+    cfg: CiWaitConfig | None = None,
+) -> str:
+    """
+    Extract logs from a check run.
+    
+    For GitHub Actions check runs, attempts to fetch detailed logs from the Actions API
+    if a details_url is present. Falls back to check run output fields otherwise.
+    """
+    # First, try to fetch logs from Actions API if this is an Actions check run
+    details_url = cr.get("details_url")
+    if details_url and owner and repo and token and cfg:
+        run_id, job_id = _parse_actions_ids(details_url)
+        if job_id:
+            actions_logs = _fetch_actions_job_logs(
+                owner, repo, job_id, token=token, cfg=cfg
+            )
+            if actions_logs:
+                return actions_logs
+    
+    # Fall back to check run output fields
     output = cr.get("output") or {}
     summary = (output.get("summary") or "").strip()
     text = (output.get("text") or "").strip()
@@ -69,12 +122,18 @@ def _build_failures(
     failed_check_runs: List[Dict[str, Any]],
     failed_statuses: List[Dict[str, Any]],
     combined_state: str,
+    owner: str | None = None,
+    repo: str | None = None,
+    token: str | None = None,
+    cfg: CiWaitConfig | None = None,
 ) -> List[CiFailure]:
     failures: list[CiFailure] = []
     for cr in failed_check_runs:
         name = str(cr.get("name") or cr.get("app", {}).get("name") or "check")
         details_url = (cr.get("details_url") or None) if isinstance(cr, dict) else None
-        logs = _check_run_logs(cr)
+        logs = _check_run_logs(
+            cr, owner=owner, repo=repo, token=token, cfg=cfg
+        )
         failures.append(
             CiFailure(
                 pr_url=pr_url,
@@ -630,6 +689,10 @@ def wait_for_ci(
                 failed_check_runs=failed_check_runs,
                 failed_statuses=failed_statuses,
                 combined_state=combined_state,
+                owner=owner,
+                repo=repo,
+                token=token,
+                cfg=cfg,
             )
 
         if pending or combined_state == "pending":
@@ -656,6 +719,10 @@ def wait_for_ci(
                     failed_check_runs=last_failed_check_runs,
                     failed_statuses=last_failed_statuses,
                     combined_state=combined_state,
+                    owner=owner,
+                    repo=repo,
+                    token=token,
+                    cfg=cfg,
                 )
             if combined_state == "success":
                 return []
@@ -666,6 +733,10 @@ def wait_for_ci(
                     failed_check_runs=[],
                     failed_statuses=failed_statuses,
                     combined_state=combined_state,
+                    owner=owner,
+                    repo=repo,
+                    token=token,
+                    cfg=cfg,
                 )
 
         time.sleep(cfg.poll_seconds)
